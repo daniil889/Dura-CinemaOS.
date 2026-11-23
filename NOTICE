@@ -1,0 +1,24 @@
+tvOS Launcher
+Copyright 2026 techgenius
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Modifications (Russian fork, https://github.com/disasdter/tvOS-Launcher-RUS-):
+- Full Russian localization of the user interface (I18n.java: initRussian(), buildRuRules()),
+  including dynamic strings, counters, dates and plural forms; res/values-ru/.
+- Russian translation of README.md, CONTRIBUTING.md and docs/.
+- In-app update checks point to this fork's GitHub Releases instead of the upstream project.
+
+Original project: https://github.com/techgenius1/tvOS-Launcher
+
+Credits and acknowledgements:
+- Hume Launcher (https://github.com/petrobot-admin/hume-launcher)
+- Couch TV (https://github.com/Seagey/couch-tv)
+- CleanYourTV (https://github.com/Gathin23/cleanyourtv)
+
+This product includes third-party components under their own licences:
+
+- Inter typeface — Copyright the Inter Project Authors — SIL Open Font License 1.1
+  (assets/fonts/Inter-LICENSE.txt)
+- QR Code generator library (Java) — Copyright (c) Project Nayuki — MIT License
+  (src/io/nayuki/qrcodegen)

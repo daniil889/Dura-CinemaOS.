@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="power_service_desc">Позволяет tvOS Launcher от techgenius переназначать кнопки пульта, открывать панель управления поверх любого приложения, переводить ТВ в сон (выключение, таймер сна) и закрывать фоновые приложения.</string>
+    <string name="power_service_label">tvOS Launcher – переназначение кнопок и панель управления</string>
+    <string name="media_service_label">tvOS Launcher – продолжение просмотра</string>
+</resources>
