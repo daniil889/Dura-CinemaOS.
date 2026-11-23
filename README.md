@@ -1,6 +1,5 @@
 # tvOS Launcher (`v2.2.5`)
 
-> 🇹🇷 **Документация и руководство по установке на турецком:** **[README_TR.md (Türkçe)](README_TR.md)**  
 > 📦 **Скачать последний APK (`v2.2.5`):** **[GitHub Releases](https://github.com/techgenius1/tvOS-Launcher/releases/latest)**
 
 ![tvOS Launcher Header](screenshots_en/Header_EN.jpg)
