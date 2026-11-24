@@ -318,6 +318,19 @@ adb shell am start -n com.techgenius.tvoslauncher/.MainActivity
 > отличается от ключа официальных релизов. Если у вас уже установлена официальная сборка,
 > сначала удалите её: `adb uninstall com.techgenius.tvoslauncher` (настройки при этом
 > сбросятся), затем установите APK заново.
+>
+> **Если данные восстанавливаются через `adb` (tar-архив `/data/data/...`), а не через
+> встроенную резервную копию**, после переустановки файлы остаются за прежним UID. Лаунчер
+> тогда не может прочитать `shared_prefs/setup.xml`, считает настройку незавершённой и
+> снова показывает экран «Начать». Приведите владельца файлов к текущему UID приложения:
+>
+> ```sh
+> PKG=com.techgenius.tvoslauncher
+> UID=$(adb shell stat -c %u /data/data/$PKG | tr -d '\r')
+> adb shell chown -R $UID:$UID /data/data/$PKG
+> adb shell restorecon -R /data/data/$PKG
+> adb shell am force-stop $PKG
+> ```
 
 ---
 
