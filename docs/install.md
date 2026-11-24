@@ -25,6 +25,22 @@ VERSION_CODE=62 VERSION_NAME=6.9 ./build.sh
 > `adb uninstall com.techgenius.tvoslauncher`. Настройки при этом сбрасываются, поэтому
 > сделайте резервную копию (Настройки → Система → Резервная копия) и восстановите её после
 > установки.
+>
+> **Если данные восстанавливаются через `adb` (tar-архив `/data/data/...`), а не через
+> встроенную резервную копию**, после установки приложение получает новый UID, и
+> восстановленные файлы остаются за прежним владельцем. Тогда лаунчер не может прочитать
+> `shared_prefs/setup.xml`, считает настройку незавершённой и снова показывает экран
+> «Начать», а в `logcat` видны `Attempt to read preferences file ... without permission` и
+> `SQLiteCantOpenDatabaseException ... Permission denied`. Приведите владельца файлов к
+> текущему UID приложения:
+>
+> ```sh
+> PKG=com.techgenius.tvoslauncher
+> UID=$(adb shell stat -c %u /data/data/$PKG | tr -d '\r')
+> adb shell chown -R $UID:$UID /data/data/$PKG
+> adb shell restorecon -R /data/data/$PKG
+> adb shell am force-stop $PKG
+> ```
 
 ## Установка и назначение домашним экраном
 
