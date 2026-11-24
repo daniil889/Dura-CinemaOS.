@@ -1427,10 +1427,13 @@ public final class Scenes {
                 Spec spec = LOCK_FOLDER_SHUFFLE_ID.equals(base) ? LOCK_FOLDER_SHUFFLE_SPEC : FOLDER_SHUFFLE_SPEC;
                 LoadedScene ls = new LoadedScene(spec);
                 ls.customTs = System.currentTimeMillis();
-                ls.ownsBg = true;
                 ls.bg = CustomMedia.getNextShuffledFolderBitmap(c, scope, 1920, 1080, true);
                 if (ls.bg == null) {
+                    ls.ownsBg = true;
                     ls.bg = loadAssetBitmap(c, ALL[0].bgAsset, 1920, 1080);
+                } else {
+                    // The shuffled bitmap lives in CustomMedia's cache, so this scene does not own it.
+                    ls.ownsBg = false;
                 }
                 bakeLoadedGlassFromBg(ls, false);
                 return ls;

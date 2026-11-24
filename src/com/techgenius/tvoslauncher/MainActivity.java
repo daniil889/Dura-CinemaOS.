@@ -1339,9 +1339,9 @@ public class MainActivity extends Activity {
             if (subMode == CustomMedia.CUSTOM_MODE_REDDIT || Scenes.REDDIT_WALLPAPER_ID.equals(style)) {
                 Bitmap rb = CustomMedia.getRedditWallpaperBitmap(this, CustomMedia.SCOPE_CLASSIC, 1920, 1080);
                 if (rb != null && !rb.isRecycled()) {
+                    // Cached by CustomMedia and possibly drawn by the scene view: copy it, never recycle it.
                     Bitmap copy = rb.copy(Bitmap.Config.ARGB_8888, true);
-                    if (copy != rb) rb.recycle();
-                    return bakeShade(copy);
+                    if (copy != null) return bakeShade(copy);
                 } else {
                     CustomMedia.fetchNextRedditWallpaperAsync(this, CustomMedia.SCOPE_CLASSIC, () -> {
                         if (!Scenes.isScenesLook(this)) setWallpaper(wallStyle);
@@ -1350,9 +1350,10 @@ public class MainActivity extends Activity {
             } else if (subMode == CustomMedia.CUSTOM_MODE_FOLDER_SHUFFLE || FOLDER_SHUFFLE_WALL_KEY.equals(style)) {
                 Bitmap folderBmp = CustomMedia.getNextShuffledFolderBitmap(this, CustomMedia.SCOPE_CLASSIC, 1920, 1080, true);
                 if (folderBmp != null && !folderBmp.isRecycled()) {
+                    // CustomMedia caches this bitmap and hands it out again, so copy it instead of
+                    // recycling the original.
                     Bitmap copy = folderBmp.copy(Bitmap.Config.ARGB_8888, true);
-                    if (copy != folderBmp) folderBmp.recycle();
-                    return bakeShade(copy);
+                    if (copy != null) return bakeShade(copy);
                 }
             } else {
                 Bitmap custom = CustomMedia.getCustomClassicWallpaper(this);
@@ -1365,9 +1366,9 @@ public class MainActivity extends Activity {
         if (FOLDER_SHUFFLE_WALL_KEY.equals(style)) {
             Bitmap folderBmp = CustomMedia.getNextShuffledFolderBitmap(this, CustomMedia.SCOPE_CLASSIC, 1920, 1080, true);
             if (folderBmp != null && !folderBmp.isRecycled()) {
+                // Cached by CustomMedia: copy, never recycle the shared bitmap.
                 Bitmap copy = folderBmp.copy(Bitmap.Config.ARGB_8888, true);
-                if (copy != folderBmp) folderBmp.recycle();
-                return bakeShade(copy);
+                if (copy != null) return bakeShade(copy);
             }
         }
         if (CUSTOM_WALL_KEY.equals(style)) {

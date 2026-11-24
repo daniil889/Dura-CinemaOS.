@@ -430,13 +430,16 @@ public class SettingsActivity extends Activity {
     private static Bitmap buildSettingsBackdropStatic(android.content.Context ctx, String sceneId) {
         try {
             Scenes.Spec spec = Scenes.byId(sceneId);
-            Bitmap src = Scenes.CUSTOM_ID.equals(sceneId)
+            boolean fromCache = Scenes.CUSTOM_ID.equals(sceneId);
+            Bitmap src = fromCache
                     ? CustomMedia.getCustomSceneWallpaper(ctx, 480, 270)
                     : Scenes.loadAssetBitmap(ctx, spec.bgAsset, 480, 270);
             if (src == null) return null;
             int w = 240, h = 135;
             Bitmap base = Bitmap.createScaledBitmap(src, w, h, true);
-            if (base != src) src.recycle();
+            // A custom wallpaper comes from CustomMedia's shared cache and is still drawn on the
+            // home screen, so only a freshly decoded asset may be recycled here.
+            if (!fromCache && base != src) src.recycle();
             Canvas c = new Canvas(base);
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
             // Subtle dock-like color dots along the bottom before blurring, as seen in home-settings.jpg
@@ -508,16 +511,18 @@ public class SettingsActivity extends Activity {
         });
     }
 
+    /**
+     * Drops the pre-warmed Settings bitmaps when the launcher is in the background.
+     *
+     * <p>These bitmaps are handed straight to the ImageViews and BitmapDrawables of the Settings
+     * screen, so they must never be recycled here: the screen keeps drawing them after it becomes
+     * visible again, and recycling under it crashed the process with
+     * {@code Canvas: trying to use a recycled bitmap} as soon as the window was redrawn. The
+     * references are dropped and the GC reclaims the pixels once no view holds them.
+     */
     public static void clearPrewarmCache() {
-        Bitmap backdrop = sCachedBackdropBmp;
         sCachedBackdropBmp = null;
         sCachedBackdropKey = null;
-        if (backdrop != null && !backdrop.isRecycled()) {
-            backdrop.recycle();
-        }
-        for (Bitmap b : SCENE_THUMB_CACHE.values()) {
-            if (b != null && !b.isRecycled()) b.recycle();
-        }
         SCENE_THUMB_CACHE.clear();
     }
 
@@ -4925,9 +4930,9 @@ public class SettingsActivity extends Activity {
             bindCustomThumbAsync(thumb, "custom_classic", tw * 2, th * 2, () -> {
                 Bitmap full = CustomMedia.getCustomClassicWallpaper(this);
                 if (full == null) return null;
-                Bitmap scaled = Bitmap.createScaledBitmap(full, tw * 2, th * 2, true);
-                if (scaled != full) full.recycle();
-                return scaled;
+                // `full` belongs to CustomMedia's shared cache and is still drawn elsewhere,
+                // so it must not be recycled here.
+                return Bitmap.createScaledBitmap(full, tw * 2, th * 2, true);
             });
         } else {
             thumb.setImageBitmap(buildPlaceholderThumb(tw * 2, th * 2));
