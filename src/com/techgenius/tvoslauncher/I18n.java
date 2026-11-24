@@ -300,7 +300,7 @@ public final class I18n {
         add("Good morning", "सुप्रभात", "Buenos días", "Bonjour", "Guten Morgen", "Buongiorno", "Доброе утро", "Bom dia", "صباح الخير", "おはようございます", "早上好");
         add("Good afternoon", "नमस्कार", "Buenas tardes", "Bon après-midi", "Guten Tag", "Buon pomeriggio", "Добрый день", "Boa tarde", "مساء الخير", "こんにちは", "下午好");
         add("Good evening", "शुभ संध्या", "Buenas noches", "Bonsoir", "Guten Abend", "Buonasera", "Добрый вечер", "Boa noite", "مساء الخير", "こんばんは", "晚上好");
-        add("Good night", "शुभ रात्रि", "Buenas noches", "Bonne nuit", "Gute Nacht", "Buonanotte", "Спокойной ночи", "Boa noite", "تصبح على خير", "おやすみなさい", "晚安");
+        add("Good night", "शुभ रात्रि", "Buenas noches", "Bonne nuit", "Gute Nacht", "Buonanotte", "Доброй ночи", "Boa noite", "تصبح على خير", "おやすみなさい", "晚安");
 
         // Weather conditions
         add("Clear", "साफ़", "Despejado", "Dégagé", "Klar", "Sereno", "Ясно", "Limpo", "صافي", "快晴", "晴朗");
@@ -3061,6 +3061,13 @@ public final class I18n {
         ru("Upload form field named file is required", "Требуется поле формы загрузки с именем file");
         ru("Playlist name is required", "Требуется имя плейлиста");
         ru("Playlist name must be 80 characters or less", "Имя плейлиста должно быть не длиннее 80 символов");
+        ru("Slide %1$d has a duplicate id", "Слайд %1$d: повторяющийся идентификатор");
+        ru("Slide %1$d duration must be between 1 second and 24 hours", "Слайд %1$d: время показа должно быть от 1 секунды до 24 часов");
+        ru("Slide %1$d order must not be negative", "Слайд %1$d: порядок не может быть отрицательным");
+        ru("Slide %1$d requires a media item", "Слайд %1$d: требуется медиафайл");
+        ru("Slide %1$d webpage URL must start with http:// or https://", "Слайд %1$d: адрес веб-страницы должен начинаться с http:// или https://");
+        ru("Slide %1$d webpage scroll speed must be between 5 and 1000 pixels per second", "Слайд %1$d: скорость прокрутки веб-страницы должна быть от 5 до 1000 пикселей в секунду");
+        ru("Slide %1$d webpage wait time must be between 0 and 300 seconds", "Слайд %1$d: пауза перед прокруткой должна быть от 0 до 300 секунд");
         ru("Webpage failed to load: %1$s", "Не удалось загрузить веб-страницу: %1$s");
         ru("Nothing to present yet", "Пока нечего показывать");
         ru("Add images, videos or webpages from a phone or computer on the same Wi-Fi.", "Добавьте изображения, видео или веб-страницы с телефона или компьютера в той же сети Wi-Fi.");

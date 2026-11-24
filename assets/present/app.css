@@ -87,9 +87,11 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .segmented { display: inline-flex; background: var(--fill); border-radius: 9px; padding: 2px; gap: 2px; }
 .segmented button {
   appearance: none; border: 0; background: transparent; color: var(--label); font: inherit; font-weight: 600;
-  font-size: 13px; padding: 6px 16px; border-radius: 7px; cursor: pointer;
+  font-size: 13px; padding: 6px 16px; border-radius: 7px; cursor: pointer; white-space: nowrap;
 }
 .segmented.small button { padding: 4px 12px; font-size: 12.5px; }
+.cell .segmented { flex: 0 0 auto; max-width: 100%; }
+.cell .segmented button { padding: 4px 8px; flex: 0 1 auto; min-width: 0; }
 .segmented button[aria-selected="true"], .segmented button[aria-pressed="true"] { background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 
 /* Pairing */
@@ -249,9 +251,11 @@ body.wide .now { max-width: 1200px; }
 .inspector { display: grid; gap: 6px; padding-bottom: 4px; }
 .group-label { font-size: 12px; color: var(--label-2); text-transform: uppercase; letter-spacing: .04em; padding: 10px 14px 4px; }
 .group { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
-.cell { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 7px 12px 7px 14px; }
+.cell { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 7px 12px 7px 14px; }
+/* Long labels (Russian "Растянуть") keep whole words: the control drops to its own line instead of clipping. */
+.cell > span:first-child, .cell > label { white-space: nowrap; }
 .cell + .cell { border-top: 0.5px solid var(--sep); margin-inline-start: 14px; padding-inline-start: 0; }
-.cell > label, .cell > span:first-child { font-size: 14.5px; color: var(--label); flex: none; }
+.cell > label, .cell > span:first-child { font-size: 14.5px; color: var(--label); flex: 0 1 auto; min-width: 0; }
 .cell.stack { flex-direction: column; align-items: stretch; gap: 8px; padding-top: 10px; padding-bottom: 12px; }
 .cell.stack .row { display: flex; align-items: center; gap: 10px; }
 .cell select, .cell input[type="url"], .cell input[type="text"] {
