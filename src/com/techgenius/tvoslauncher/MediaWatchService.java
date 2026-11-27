@@ -108,6 +108,8 @@ public class MediaWatchService extends NotificationListenerService {
         }
         tracked.clear();
         trackedControllers.clear();
+        // Keep Continue Watching alive if Android drops the notification-listener binding.
+        MAIN_HANDLER.post(() -> ensureSessionTracking(getApplicationContext()));
     }
 
     @Override
