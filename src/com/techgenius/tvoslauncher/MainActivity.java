@@ -6029,6 +6029,8 @@ public class MainActivity extends Activity {
             sceneHome.refreshWeatherBtn();
             if (d != null) {
                 sceneHome.sceneView.setWeather(d.temp + "\u00b0", Weather.describe(this, d.code, d.day), d.code);
+                // Refresh the visible dashboard weather glyph and forecast as soon as new data lands.
+                if (sceneHome.isDashboardShowing()) sceneHome.refreshDashboardInPlace();
             } else {
                 sceneHome.sceneView.setWeather(null, null, -1);
             }
