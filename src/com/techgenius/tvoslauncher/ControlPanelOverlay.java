@@ -483,6 +483,12 @@ public final class ControlPanelOverlay {
                 openBluetoothSettings(c);
             }, false));
         }
+        if (isItemEnabled(c, ITEM_VPN)) {
+            capsules.add(new CapsuleSpec("shield", "VPN", () -> vpnState(c), v -> {
+                dismissAll(c);
+                openVpnSettings(c);
+            }, false));
+        }
         if (isItemEnabled(c, ITEM_MEMORY)) {
             capsules.add(new CapsuleSpec("memory", I18n.s(c, "Memory", "Bellek"), () -> memoryState(c), v -> {
                 dismissAll(c);
@@ -1247,6 +1253,7 @@ public final class ControlPanelOverlay {
 
     public static final String ITEM_WIFI = "wifi";
     public static final String ITEM_BLUETOOTH = "bluetooth";
+    public static final String ITEM_VPN = "vpn";
     public static final String ITEM_MEMORY = "memory";
     public static final String ITEM_DND = "dnd";
     public static final String ITEM_AUDIO = "audio";
@@ -1262,6 +1269,7 @@ public final class ControlPanelOverlay {
     public static final String[][] ALL_CP_ITEMS = {
         {ITEM_WIFI, "Wi-Fi", "Wi-Fi"},
         {ITEM_BLUETOOTH, "Bluetooth", "Bluetooth"},
+        {ITEM_VPN, "VPN", "VPN"},
         {ITEM_MEMORY, "Memory / Recent Apps", "Bellek / Son Uygulamalar"},
         {ITEM_DND, "Do Not Disturb", "Rahatsız Etmeyin"},
         {ITEM_AUDIO, "Audio Output", "Ses Çıkışı"},
@@ -1433,6 +1441,24 @@ public final class ControlPanelOverlay {
             }
         }
         return false;
+    }
+
+    public static String vpnState(Context c) {
+        try {
+            ConnectivityManager cm = c.getSystemService(ConnectivityManager.class);
+            if (cm == null) return I18n.s(c, "Status unavailable", "Durum kullanılamıyor");
+            NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
+            return nc != null && nc.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                    ? I18n.s(c, "Connected", "Bağlı")
+                    : I18n.s(c, "Not Connected", "Bağlı Değil");
+        } catch (Exception e) {
+            return I18n.s(c, "Status unavailable", "Durum kullanılamıyor");
+        }
+    }
+
+    public static void openVpnSettings(Context c) {
+        startExternal(c, new Intent(Settings.ACTION_VPN_SETTINGS),
+                new Intent(Settings.ACTION_WIRELESS_SETTINGS), new Intent(Settings.ACTION_SETTINGS));
     }
 
     public static void openWifiSettings(Context c) {
