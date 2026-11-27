@@ -54,6 +54,20 @@ final class StreamingCatalog {
                 ? locale.toUpperCase(Locale.ROOT) : "US";
     }
 
+    static void invalidateCache(Context c, String packageName) {
+        if (c == null) return;
+        SharedPreferences p = prefs(c);
+        SharedPreferences.Editor edit = p.edit();
+        if (packageName == null || packageName.isEmpty()) {
+            for (String key : p.getAll().keySet()) {
+                if (key.startsWith(CACHE_PREFIX) || key.startsWith(TIME_PREFIX)) edit.remove(key);
+            }
+        } else {
+            edit.remove(CACHE_PREFIX + packageName).remove(TIME_PREFIX + packageName);
+        }
+        edit.apply();
+    }
+
     static List<Suggestions.Item> fetchForPackage(Context context, String packageName, int limit) {
         if (context == null || packageName == null || packageName.isEmpty() || limit <= 0) {
             return new ArrayList<>();
