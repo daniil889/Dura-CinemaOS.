@@ -11,7 +11,7 @@ permissions:
 
 # Push and pull_request can both fire for the same PR branch. Keep only the newest build.
 concurrency:
-  group: android-${{ github.event.pull_request.head.ref || github.ref }}
+  group: android-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
