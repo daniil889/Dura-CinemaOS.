@@ -428,12 +428,21 @@ public final class ControlPanelOverlay {
             MainActivity.LiquidGlass.Backdrop glassSource,
             int screenW,
             int screenH) {
-        // Control Center intentionally uses plain translucent surfaces, not Liquid Glass.
-        GradientDrawable surface = new GradientDrawable();
+        // tvOS 26/27 Control Center uses a backdrop-aware glass material. Keep a light
+        // fallback for 1 GB devices, where a second live material pass can cost real frames.
+        if (!MainActivity.LiquidGlass.lowRamMode && glassSource != null) {
+            MainActivity.LiquidGlass glass = new MainActivity.LiquidGlass(
+                    radius, 0x28FFFFFF, glassSource, screenW, screenH, unit).adaptive();
+            glass.lens = dp(unit, 3.5f);
+            glass.rimStrength = 0.82f;
+            return glass;
+        }
+        GradientDrawable surface = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0x3AFFFFFF, 0x1AFFFFFF});
         surface.setShape(GradientDrawable.RECTANGLE);
         surface.setCornerRadius(radius);
-        surface.setColor(0x1FFFFFFF);
-        surface.setStroke(Math.max(1, dp(unit, 1)), 0x35FFFFFF);
+        surface.setStroke(Math.max(1, dp(unit, 1)), 0x42FFFFFF);
         return surface;
     }
 
@@ -454,29 +463,39 @@ public final class ControlPanelOverlay {
             Runnable onSearch,
             Runnable onRefresh) {
 
-        int col = dp(unit, 141);
-        int gap = dp(unit, 11);
-        int cap = dp(unit, 56);
+        int col = dp(unit, 150);
+        int gap = dp(unit, 12);
+        int cap = dp(unit, 60);
         int small = (2 * col + gap - 3 * gap) / 4;
         int w = 2 * col + gap;
-        int pad = dp(unit, 14);
-        int headerH = dp(unit, 22);
+        int pad = dp(unit, 16);
+        int headerH = dp(unit, 24);
         int contentTop = headerH + gap;
 
         FrameLayout panel = new FrameLayout(c);
         panel.setClipChildren(false);
         panel.setClipToPadding(false);
-        GradientDrawable panelBg = new GradientDrawable();
-        panelBg.setColor(0x261A1B20);
-        panelBg.setCornerRadius(dp(unit, 27));
-        panelBg.setStroke(Math.max(1, dp(unit, 0.8f)), 0x55FFFFFF);
-        panel.setBackground(panelBg);
-        panel.setElevation(dp(unit, 18));
+        GradientDrawable panelFallback = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0xD92A303B, 0xD51A1E27});
+        panelFallback.setCornerRadius(dp(unit, 28));
+        panelFallback.setStroke(Math.max(1, dp(unit, 1)), 0x55FFFFFF);
+        android.graphics.drawable.Drawable panelGlass = null;
+        if (!MainActivity.LiquidGlass.lowRamMode && glassSource != null) {
+            MainActivity.LiquidGlass material = new MainActivity.LiquidGlass(
+                    dp(unit, 28), 0x6B171B24, glassSource, screenW, screenH, unit).adaptive();
+            material.lens = dp(unit, 7);
+            material.rimStrength = 0.92f;
+            panelGlass = material;
+        }
+        panel.setBackground(panelGlass != null ? panelGlass : panelFallback);
+        panel.setElevation(dp(unit, 22));
 
         TextView panelTitle = new TextView(c);
-        Ui.textSize(panelTitle, 15f);
+        Ui.textSize(panelTitle, 16f);
         panelTitle.setTypeface(Ui.font(c, "semibold"));
-        panelTitle.setTextColor(0xF5FFFFFF);
+        panelTitle.setTextColor(0xFFFFFFFF);
+        panelTitle.setShadowLayer(dp(unit, 8), 0, dp(unit, 1), 0x66000000);
         panelTitle.setText(I18n.s(c, "Control Center", "Kontrol Merkezi"));
         panelTitle.setGravity(Gravity.CENTER_VERTICAL);
         FrameLayout.LayoutParams titleLp = new FrameLayout.LayoutParams(w, headerH, Gravity.TOP | Gravity.START);
@@ -1014,8 +1033,9 @@ public final class ControlPanelOverlay {
                 ((GradientDrawable) ((View) memBarFill.getParent()).getBackground()).setColor(has ? 0x33111114 : 0x40FFFFFF);
                 ((GradientDrawable) memBarFill.getBackground()).setColor(has ? 0xFF111114 : (memoryUsed(c) > 0.85f ? 0xFFFF9F0A : Color.WHITE));
             }
-            v.animate().scaleX(has ? 1.05f : 1f).scaleY(has ? 1.05f : 1f)
-                    .setDuration(180).setInterpolator(MainActivity.LIFT).start();
+            v.animate().withLayer().scaleX(has ? 1.045f : 1f).scaleY(has ? 1.045f : 1f)
+                    .translationZ(has ? dp(unit, 8) : 0f)
+                    .setDuration(has ? 205 : 165).setInterpolator(MainActivity.LIFT).start();
         });
 
         t.setOnClickListener(v -> {
