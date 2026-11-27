@@ -1909,11 +1909,13 @@ public class SettingsActivity extends Activity {
                     String value = input.getText().toString().trim();
                     if (value.isEmpty()) return;
                     StreamingCatalog.prefs(this).edit().putString(key, value).apply();
+                    StreamingCatalog.invalidateCache(this, null);
                     rebuildMainRows();
                     showStatusMsg(tr("Catalogue credential saved.", "Katalog anahtarı kaydedildi."));
                 })
                 .setNeutralButton(tr("Clear", "Temizle"), (d, w) -> {
                     StreamingCatalog.prefs(this).edit().remove(key).apply();
+                    StreamingCatalog.invalidateCache(this, null);
                     rebuildMainRows();
                     showStatusMsg(tr("Catalogue credential cleared.", "Katalog anahtarı temizlendi."));
                 })
@@ -1942,12 +1944,14 @@ public class SettingsActivity extends Activity {
                         return;
                     }
                     StreamingCatalog.prefs(this).edit().putString(StreamingCatalog.KEY_REGION, value).apply();
+                    StreamingCatalog.invalidateCache(this, null);
                     Suggestions.changed(this);
                     rebuildMainRows();
                     showStatusMsg(tr("Catalogue region updated to " + value + ".", "Katalog bölgesi " + value + " olarak güncellendi."));
                 })
                 .setNeutralButton(tr("Use device region", "Cihaz bölgesini kullan"), (d, w) -> {
                     StreamingCatalog.prefs(this).edit().remove(StreamingCatalog.KEY_REGION).apply();
+                    StreamingCatalog.invalidateCache(this, null);
                     Suggestions.changed(this);
                     rebuildMainRows();
                 })
