@@ -3139,14 +3139,22 @@ public class MainActivity extends Activity {
             }
         }
         if (f == vpnButton || f == classicWeatherButton || f == refreshButton || f == searchButton || f == ccButton || f == avatarView) {
-            // Status row, left to right: VPN, Weather (if Big Clock), Refresh, Search, Control Center, profile.
+            // Explicit tvOS-style focus order. Skip optional controls when their preference hides them.
+            boolean weatherShortcutVisible = classicWeatherButton != null
+                    && classicWeatherButton.getVisibility() == View.VISIBLE;
+            boolean searchShortcutVisible = searchButton != null
+                    && searchButton.getVisibility() == View.VISIBLE;
+            boolean profileShortcutVisible = avatarView != null
+                    && avatarView.getVisibility() == View.VISIBLE;
             if (k == KeyEvent.KEYCODE_DPAD_LEFT) {
                 if (down) {
                     if (f == avatarView) ccButton.requestFocus();
-                    else if (f == ccButton) searchButton.requestFocus();
-                    else if (f == searchButton) refreshButton.requestFocus();
+                    else if (f == ccButton) {
+                        if (searchShortcutVisible) searchButton.requestFocus();
+                        else refreshButton.requestFocus();
+                    } else if (f == searchButton) refreshButton.requestFocus();
                     else if (f == refreshButton) {
-                        if (classicWeatherButton != null && classicWeatherButton.getVisibility() == View.VISIBLE) classicWeatherButton.requestFocus();
+                        if (weatherShortcutVisible) classicWeatherButton.requestFocus();
                         else vpnButton.requestFocus();
                     } else if (f == classicWeatherButton) vpnButton.requestFocus();
                     else if (f == vpnButton) {
@@ -3159,12 +3167,14 @@ public class MainActivity extends Activity {
             if (k == KeyEvent.KEYCODE_DPAD_RIGHT) {
                 if (down) {
                     if (f == vpnButton) {
-                        if (classicWeatherButton != null && classicWeatherButton.getVisibility() == View.VISIBLE) classicWeatherButton.requestFocus();
+                        if (weatherShortcutVisible) classicWeatherButton.requestFocus();
                         else refreshButton.requestFocus();
                     } else if (f == classicWeatherButton) refreshButton.requestFocus();
-                    else if (f == refreshButton) searchButton.requestFocus();
-                    else if (f == searchButton) ccButton.requestFocus();
-                    else if (f == ccButton && avatarView != null && avatarView.getVisibility() == View.VISIBLE) avatarView.requestFocus();
+                    else if (f == refreshButton) {
+                        if (searchShortcutVisible) searchButton.requestFocus();
+                        else ccButton.requestFocus();
+                    } else if (f == searchButton) ccButton.requestFocus();
+                    else if (f == ccButton && profileShortcutVisible) avatarView.requestFocus();
                 }
                 return true;
             }
