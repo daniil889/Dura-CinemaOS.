@@ -457,11 +457,30 @@ public final class ControlPanelOverlay {
         int cap = dp(unit, 56);
         int small = (2 * col + gap - 3 * gap) / 4;
         int w = 2 * col + gap;
-        int pad = 0;
+        int pad = dp(unit, 14);
+        int headerH = dp(unit, 22);
+        int contentTop = headerH + gap;
 
         FrameLayout panel = new FrameLayout(c);
         panel.setClipChildren(false);
         panel.setClipToPadding(false);
+        GradientDrawable panelBg = new GradientDrawable();
+        panelBg.setColor(0xB31A1B20);
+        panelBg.setCornerRadius(dp(unit, 27));
+        panelBg.setStroke(Math.max(1, dp(unit, 0.8f)), 0x55FFFFFF);
+        panel.setBackground(panelBg);
+        panel.setElevation(dp(unit, 18));
+
+        TextView panelTitle = new TextView(c);
+        Ui.textSize(panelTitle, 15f);
+        panelTitle.setTypeface(Ui.font(c, "semibold"));
+        panelTitle.setTextColor(0xF5FFFFFF);
+        panelTitle.setText(I18n.s(c, "Control Center", "Kontrol Merkezi"));
+        panelTitle.setGravity(Gravity.CENTER_VERTICAL);
+        FrameLayout.LayoutParams titleLp = new FrameLayout.LayoutParams(w, headerH, Gravity.TOP | Gravity.START);
+        titleLp.leftMargin = pad;
+        titleLp.topMargin = pad;
+        panel.addView(panelTitle, titleLp);
 
         final class CapsuleSpec {
             final String glyph;
@@ -547,7 +566,7 @@ public final class ControlPanelOverlay {
             int colIdx = i % 2;
             int rowIdx = i / 2;
             int x = pad + colIdx * (col + gap);
-            int y = pad + rowIdx * (cap + gap);
+            int y = pad + contentTop + rowIdx * (cap + gap);
             View tile = makeTile(c, panel, x, y, col, cap, unit, screenW, screenH, glassSource,
                     cs.glyph, cs.title, cs.status, cs.click);
             if (cs.isMemory) {
@@ -557,7 +576,7 @@ public final class ControlPanelOverlay {
         }
 
         int capsuleRows = (capsules.size() + 1) / 2;
-        int y4 = capsuleRows > 0 ? capsuleRows * (cap + gap) : 0;
+        int y4 = contentTop + (capsuleRows > 0 ? capsuleRows * (cap + gap) : 0);
 
         String[] itemKeys = {ITEM_INPUTS, ITEM_MAPPER, ITEM_SETTINGS, ITEM_SEARCH, ITEM_REFRESH};
         String[] icons = {"input", "remote", "gear", "search", "refresh"};
@@ -586,7 +605,7 @@ public final class ControlPanelOverlay {
 
         int totalH = !enabledSmallIdx.isEmpty()
                 ? (y4 + smallRows * small + Math.max(0, smallRows - 1) * gap)
-                : Math.max(0, capsuleRows * (cap + gap) - gap);
+                : contentTop + Math.max(0, capsuleRows * (cap + gap) - gap);
 
         if (isItemEnabled(c, ITEM_WEATHER_PANEL)) {
             int yWeather = totalH > 0 ? (totalH + gap) : 0;
