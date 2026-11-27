@@ -1216,6 +1216,18 @@ public class MainActivity extends Activity {
         topSheen.setAlpha(0f);
         tile.addView(topSheen, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, cardH / 2, Gravity.TOP));
 
+        // The focused card gets a real backdrop-sampled glass layer, not a static translucent fill.
+        // It is only attached to the draw pass while focused to keep idle GPU cost near zero.
+        LiquidGlass cardGlass = new LiquidGlass(cardRadius, 0x16FFFFFF, glassSource,
+                screenW, screenH, unit).adaptive();
+        cardGlass.lens = dp(5);
+        cardGlass.rimStrength = 1.12f;
+        View focusGlass = new View(this);
+        focusGlass.setBackground(cardGlass);
+        focusGlass.setAlpha(0f);
+        focusGlass.setVisibility(View.GONE);
+        tile.addView(focusGlass, match());
+
         // A restrained glass rim completes the focused-card treatment without a heavy outline.
         View focusRim = new View(this);
         GradientDrawable rim = new GradientDrawable();
@@ -1242,23 +1254,47 @@ public class MainActivity extends Activity {
                     // Rebuilt while moving: appear already lifted, or every step would "pop".
                     v.setScaleX(FOCUS_SCALE);
                     v.setScaleY(FOCUS_SCALE);
+                    v.setRotationX(0f);
+                    v.setRotationY(0f);
                     label.setAlpha(1f);
                     label.setTranslationY(cardH * (FOCUS_SCALE - 1f) / 2f);
                 } else {
-                    v.animate().scaleX(FOCUS_SCALE).scaleY(FOCUS_SCALE).setDuration(180)
-                            .setInterpolator(LIFT).start();
-                    label.animate().alpha(1f).translationY(cardH * (FOCUS_SCALE - 1f) / 2f).setDuration(160).start();
+                    // A tiny perspective lean points each focused card back toward the viewer.
+                    // It is position-based (not an endless animation), so DPAD navigation stays calm.
+                    int[] screenPos = new int[2];
+                    v.getLocationOnScreen(screenPos);
+                    float nx = ((screenPos[0] + v.getWidth() * 0.5f) - screenW * 0.5f)
+                            / Math.max(1f, screenW * 0.5f);
+                    float ny = ((screenPos[1] + v.getHeight() * 0.5f) - screenH * 0.5f)
+                            / Math.max(1f, screenH * 0.5f);
+                    float tiltY = -Math.max(-1f, Math.min(1f, nx)) * 1.55f;
+                    float tiltX = Math.max(-1f, Math.min(1f, ny)) * 0.85f;
+                    v.animate().scaleX(FOCUS_SCALE).scaleY(FOCUS_SCALE)
+                            .rotationX(tiltX).rotationY(tiltY).translationZ(dp(9))
+                            .setDuration(230).setInterpolator(LIFT).start();
+                    label.animate().alpha(1f).translationY(cardH * (FOCUS_SCALE - 1f) / 2f)
+                            .setDuration(170).setInterpolator(LIFT).start();
                 }
-                topSheen.animate().alpha(1f).setDuration(150).start();
-                focusRim.animate().alpha(0.82f).setDuration(150).start();
+                cardGlass.setLit(true);
+                focusGlass.setVisibility(View.VISIBLE);
+                focusGlass.setAlpha(0f);
+                focusGlass.animate().alpha(0.28f).setDuration(190).setInterpolator(EASE).start();
+                topSheen.animate().alpha(1f).setDuration(170).start();
+                focusRim.animate().alpha(0.82f).setDuration(170).start();
                 onTileFocused(index);
             } else {
                 cell.setTranslationZ(0);
                 stopSway(v);
-                v.animate().scaleX(1f).scaleY(1f).setDuration(140).setInterpolator(EASE).start();
-                label.animate().alpha(0f).translationY(0).setDuration(120).start();
-                topSheen.animate().alpha(0f).setDuration(120).start();
-                focusRim.animate().alpha(0f).setDuration(120).start();
+                cardGlass.setLit(false);
+                focusGlass.animate().alpha(0f).setDuration(130).setInterpolator(EASE)
+                        .withEndAction(() -> {
+                            if (!tile.hasFocus()) focusGlass.setVisibility(View.GONE);
+                        }).start();
+                v.animate().scaleX(1f).scaleY(1f).rotationX(0f).rotationY(0f)
+                        .translationZ(0f).setDuration(170).setInterpolator(EASE).start();
+                label.animate().alpha(0f).translationY(0).setDuration(130).start();
+                topSheen.animate().alpha(0f).setDuration(130).start();
+                focusRim.animate().alpha(0f).setDuration(130).start();
             }
         });
         tile.setCameraDistance(9000 * unit);
@@ -3844,7 +3880,11 @@ public class MainActivity extends Activity {
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(28), dp(22), dp(28), dp(22));
-        panel.setBackground(folderPanelBackground());
+        LiquidGlass folderGlass = new LiquidGlass(dp(28), 0xB81A1D26, glassSource,
+                screenW, screenH, unit).adaptive().darker(0x48);
+        folderGlass.lens = dp(8);
+        folderGlass.rimStrength = 1.18f;
+        panel.setBackground(folderGlass);
         panel.setElevation(dp(28));
         panel.setOnClickListener(v -> { /* consume clicks inside the folder surface */ });
         FrameLayout.LayoutParams panelLp = new FrameLayout.LayoutParams(panelW, panelH, Gravity.CENTER);
@@ -3920,7 +3960,15 @@ public class MainActivity extends Activity {
             int iconSize = dp(58);
             FrameLayout.LayoutParams iconLp = new FrameLayout.LayoutParams(iconSize, iconSize, Gravity.CENTER);
             iconSurface.addView(icon, iconLp);
+            View iconSheen = new View(this);
+            iconSheen.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                    new int[]{0x2AFFFFFF, 0x00FFFFFF}));
+            iconSheen.setAlpha(0f);
+            iconSurface.addView(iconSheen, match());
             item.addView(iconSurface, new LinearLayout.LayoutParams(dp(88), dp(88)));
+            item.setCameraDistance(10000f * unit);
+            final float folderTiltY = (2f - (i % columns)) * 0.42f;
+            final float folderTiltX = ((i / columns) - 1f) * 0.28f;
 
             TextView label = text(13, Ui.font(this, "medium"), 0.92f);
             label.setText(app.label);
@@ -3937,8 +3985,11 @@ public class MainActivity extends Activity {
                 itemBg.setStroke(Math.max(1, dp(1)), focused ? 0x88FFFFFF : 0x00FFFFFF);
                 iconBg.setColor(focused ? 0xFF414958 : 0xFF252A35);
                 v.animate().scaleX(focused ? 1.08f : 1f).scaleY(focused ? 1.08f : 1f)
+                        .rotationX(focused ? folderTiltX : 0f)
+                        .rotationY(focused ? folderTiltY : 0f)
                         .translationZ(focused ? dp(12) : 0)
-                        .setDuration(focused ? 180 : 140).setInterpolator(LIFT).start();
+                        .setDuration(focused ? 220 : 170).setInterpolator(LIFT).start();
+                iconSheen.animate().alpha(focused ? 0.9f : 0f).setDuration(180).start();
                 label.setTextColor(focused ? Color.WHITE : 0xD9FFFFFF);
             });
             item.setOnClickListener(v -> {
