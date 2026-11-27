@@ -3,7 +3,7 @@
 ## Сборка
 
 Ни Gradle, ни runtime-библиотек. `build.sh` запускает `aapt2` (ресурсы и ассеты) → `javac
---release 11` против `android.jar` (API 34) → `d8` (min API 24) → `zipalign` → `apksigner`
+--release 11` против `android.jar` (API 34) → `d8` (`--min-api 23`, matching the APK's declared minimum SDK) → `zipalign` → `apksigner`
 (локальный debug-ключ или приватный релизный ключ через `RELEASE_KEYSTORE`). В Windows то же
 делает `build.ps1`.
 
