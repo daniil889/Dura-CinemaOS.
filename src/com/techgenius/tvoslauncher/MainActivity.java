@@ -1309,7 +1309,7 @@ public class MainActivity extends Activity {
                     v.setRotationX(0f);
                     v.setRotationY(0f);
                     label.setAlpha(1f);
-                    label.setTranslationY(0f);
+                    label.setTranslationY(cardH * (FOCUS_SCALE - 1f) / 2f);
                 } else {
                     // A tiny perspective lean points each focused card back toward the viewer.
                     // It is position-based (not an endless animation), so DPAD navigation stays calm.
@@ -1341,7 +1341,7 @@ public class MainActivity extends Activity {
                                 .translationY(parallaxY).setDuration(215)
                                 .setInterpolator(LIFT).start();
                     }
-                    label.animate().alpha(1f).translationY(0f)
+                    label.animate().alpha(1f).translationY(cardH * (FOCUS_SCALE - 1f) / 2f)
                             .setDuration(145).setInterpolator(LIFT).start();
                 }
                 cardGlass.setLit(true);
@@ -3178,6 +3178,12 @@ public class MainActivity extends Activity {
                             if (generation == appTopShelfGeneration && poster.getParent() != null)
                                 poster.setImageBitmap(bitmap);
                             else bitmap.recycle();
+                        });
+                        else handler.post(() -> {
+                            if (generation == appTopShelfGeneration && card.getParent() == appTopShelfRow) {
+                                appTopShelfRow.removeView(card);
+                                appTopShelfCards.remove(card);
+                            }
                         });
                     });
                 }
