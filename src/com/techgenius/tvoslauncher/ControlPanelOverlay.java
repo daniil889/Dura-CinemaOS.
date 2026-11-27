@@ -466,7 +466,7 @@ public final class ControlPanelOverlay {
         int col = dp(unit, 158);
         int gap = dp(unit, 12);
         int cap = dp(unit, 60);
-        int small = (2 * col + gap - 3 * gap) / 4;
+        int small = (2 * col + gap - 4 * gap) / 5;
         int w = 2 * col + gap;
         int pad = dp(unit, 16);
         int headerH = dp(unit, 24);
@@ -599,9 +599,9 @@ public final class ControlPanelOverlay {
         int capsuleRows = (capsules.size() + 1) / 2;
         int y4 = contentTop + (capsuleRows > 0 ? capsuleRows * (cap + gap) : 0);
 
-        String[] itemKeys = {ITEM_INPUTS, ITEM_MAPPER, ITEM_SETTINGS, ITEM_SEARCH, ITEM_REFRESH};
-        String[] icons = {"input", "remote", "gear", "search", "refresh"};
-        Runnable[] actions = {onInputs, onButtonMapper, onSettings, onSearch, onRefresh};
+        String[] itemKeys = {ITEM_INPUTS, ITEM_MAPPER, ITEM_SETTINGS, ITEM_SEARCH, ITEM_REFRESH, ITEM_BRIGHTNESS};
+        String[] icons = {"input", "remote", "gear", "search", "refresh", "sun"};
+        Runnable[] actions = {onInputs, onButtonMapper, onSettings, onSearch, onRefresh, () -> DisplayBrightness.show(c)};
         List<Integer> enabledSmallIdx = new ArrayList<>();
         for (int i = 0; i < itemKeys.length; i++) {
             if (isItemEnabled(c, itemKeys[i])) {
@@ -612,12 +612,12 @@ public final class ControlPanelOverlay {
             // Never allow a completely empty panel; keep Settings accessible
             enabledSmallIdx.add(2);
         }
-        int smallRows = (enabledSmallIdx.size() + 3) / 4;
+        int smallRows = (enabledSmallIdx.size() + 4) / 5;
         for (int sIdx = 0; sIdx < enabledSmallIdx.size(); sIdx++) {
             int i = enabledSmallIdx.get(sIdx);
             final Runnable act = actions[i];
-            int smallX = pad + (sIdx % 4) * (small + gap);
-            int smallY = pad + y4 + (sIdx / 4) * (small + gap);
+            int smallX = pad + (sIdx % 5) * (small + gap);
+            int smallY = pad + y4 + (sIdx / 5) * (small + gap);
             outCells.add(makeTile(c, panel, smallX, smallY, small, small, unit, screenW, screenH, glassSource,
                     icons[i], null, null, v -> {
                         if (act != null) act.run();
@@ -1330,6 +1330,7 @@ public final class ControlPanelOverlay {
     public static final String ITEM_SETTINGS = "settings";
     public static final String ITEM_SEARCH = "search";
     public static final String ITEM_REFRESH = "refresh";
+    public static final String ITEM_BRIGHTNESS = "brightness";
     public static final String ITEM_WEATHER_PANEL = "weather_panel";
 
     public static final String[][] ALL_CP_ITEMS = {
@@ -1347,6 +1348,7 @@ public final class ControlPanelOverlay {
         {ITEM_SETTINGS, "Settings Shortcut", "Ayarlar Kısayolu"},
         {ITEM_SEARCH, "Search / Assistant Shortcut", "Arama / Asistan Kısayolu"},
         {ITEM_REFRESH, "Refresh Home Content", "Ana Ekran İçeriğini Yenile"},
+        {ITEM_BRIGHTNESS, "Display Brightness", "Ekran Parlaklığı"},
         {ITEM_WEATHER_PANEL, "Weather Panel (Current & Tomorrow)", "Hava Durumu Paneli (Şimdi ve Yarın)"}
     };
 
