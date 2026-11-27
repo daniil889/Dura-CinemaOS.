@@ -2802,7 +2802,16 @@ public class MainActivity extends Activity {
     View timeChipView;
     TextClock statusClock;
 
+    static final class AppPublishedProgram {
+        String title = "", description = "", poster = "", intentUri = "", type = "";
+    }
+
     LinearLayout classicCwBox, classicCwRow;
+    LinearLayout appTopShelfBox, appTopShelfRow;
+    android.widget.HorizontalScrollView appTopShelfScroll;
+    final List<View> appTopShelfCards = new ArrayList<>();
+    String appTopShelfPkg = "";
+    int appTopShelfGeneration = 0;
     TextView classicCwHeader;
     android.widget.HorizontalScrollView classicCwScroll;
     final List<View> classicCwCards = new ArrayList<>();
@@ -2858,6 +2867,44 @@ public class MainActivity extends Activity {
         wlp.leftMargin = side - padH;
         wlp.bottomMargin = dp(14);
         shelf.addView(classicCwBox, wlp);
+
+        appTopShelfBox = new LinearLayout(this);
+        appTopShelfBox.setOrientation(LinearLayout.VERTICAL);
+        appTopShelfBox.setClipChildren(false);
+        appTopShelfBox.setClipToPadding(false);
+        appTopShelfBox.setVisibility(View.GONE);
+        appTopShelfBox.setAlpha(0f);
+        TextView appTopShelfHeader = text(12f, Ui.font(this, "semibold"), 0.90f);
+        appTopShelfHeader.setText("Из приложения");
+        appTopShelfHeader.setLetterSpacing(0.015f);
+        appTopShelfHeader.setShadowLayer(dp(8), 0, dp(2), 0xCC000000);
+        LinearLayout.LayoutParams appHeaderLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        appHeaderLp.leftMargin = dp(14);
+        appHeaderLp.bottomMargin = dp(5);
+        appTopShelfBox.addView(appTopShelfHeader, appHeaderLp);
+        appTopShelfScroll = new android.widget.HorizontalScrollView(this) {
+            @Override public boolean executeKeyEvent(KeyEvent event) { return false; }
+        };
+        appTopShelfScroll.setHorizontalScrollBarEnabled(false);
+        appTopShelfScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        appTopShelfScroll.setClipChildren(false);
+        appTopShelfScroll.setClipToPadding(false);
+        appTopShelfRow = new LinearLayout(this);
+        appTopShelfRow.setOrientation(LinearLayout.HORIZONTAL);
+        appTopShelfRow.setClipChildren(false);
+        appTopShelfRow.setClipToPadding(false);
+        appTopShelfRow.setPadding(dp(14), dp(10), side, dp(18));
+        appTopShelfScroll.addView(appTopShelfRow, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        appTopShelfBox.addView(appTopShelfScroll, new LinearLayout.LayoutParams(
+                screenW - (side - dp(14)), ViewGroup.LayoutParams.WRAP_CONTENT));
+        FrameLayout.LayoutParams appShelfLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM | Gravity.START);
+        appShelfLp.leftMargin = side - dp(14);
+        appShelfLp.bottomMargin = dp(14);
+        shelf.addView(appTopShelfBox, appShelfLp);
 
         if (!Scenes.isScenesLook(this)) {
             rebuildClassicDashboardBox(shelf);
@@ -2978,11 +3025,180 @@ public class MainActivity extends Activity {
         heroInfo.setVisibility(View.VISIBLE);
         heroInfo.setAlpha(0f);
         heroInfo.animate().alpha(1f).setDuration(220).setInterpolator(EASE).start();
+        loadAppPublishedTopShelf(app);
+    }
+
+    /** Reads only recommendations the app itself has published to Android TV's Preview Programs API. */
+    List<AppPublishedProgram> queryAppPublishedPrograms(String pkg) {
+        List<AppPublishedProgram> out = new ArrayList<>();
+        android.database.Cursor cursor = null;
+        try {
+            android.net.Uri uri = android.media.tv.TvContract.PreviewPrograms.CONTENT_URI;
+            String[] projection = {
+                    android.media.tv.TvContract.PreviewPrograms.COLUMN_TITLE,
+                    android.media.tv.TvContract.PreviewPrograms.COLUMN_SHORT_DESCRIPTION,
+                    android.media.tv.TvContract.PreviewPrograms.COLUMN_LONG_DESCRIPTION,
+                    android.media.tv.TvContract.PreviewPrograms.COLUMN_POSTER_ART_URI,
+                    android.media.tv.TvContract.PreviewPrograms.COLUMN_THUMBNAIL_URI,
+                    android.media.tv.TvContract.PreviewPrograms.COLUMN_INTENT_URI,
+                    android.media.tv.TvContract.PreviewPrograms.COLUMN_TYPE
+            };
+            String selection = android.media.tv.TvContract.PreviewPrograms.COLUMN_PACKAGE_NAME + " = ?";
+            cursor = getContentResolver().query(uri, projection, selection, new String[]{pkg},
+                    android.media.tv.TvContract.PreviewPrograms.COLUMN_WEIGHT + " DESC");
+            if (cursor == null) return out;
+            int titleCol = cursor.getColumnIndex(android.media.tv.TvContract.PreviewPrograms.COLUMN_TITLE);
+            int shortCol = cursor.getColumnIndex(android.media.tv.TvContract.PreviewPrograms.COLUMN_SHORT_DESCRIPTION);
+            int longCol = cursor.getColumnIndex(android.media.tv.TvContract.PreviewPrograms.COLUMN_LONG_DESCRIPTION);
+            int posterCol = cursor.getColumnIndex(android.media.tv.TvContract.PreviewPrograms.COLUMN_POSTER_ART_URI);
+            int thumbCol = cursor.getColumnIndex(android.media.tv.TvContract.PreviewPrograms.COLUMN_THUMBNAIL_URI);
+            int intentCol = cursor.getColumnIndex(android.media.tv.TvContract.PreviewPrograms.COLUMN_INTENT_URI);
+            int typeCol = cursor.getColumnIndex(android.media.tv.TvContract.PreviewPrograms.COLUMN_TYPE);
+            while (cursor.moveToNext() && out.size() < 12) {
+                AppPublishedProgram item = new AppPublishedProgram();
+                if (titleCol >= 0) item.title = cursor.getString(titleCol);
+                if (shortCol >= 0) item.description = cursor.getString(shortCol);
+                if ((item.description == null || item.description.trim().isEmpty()) && longCol >= 0)
+                    item.description = cursor.getString(longCol);
+                if (posterCol >= 0) item.poster = cursor.getString(posterCol);
+                if ((item.poster == null || item.poster.isEmpty()) && thumbCol >= 0)
+                    item.poster = cursor.getString(thumbCol);
+                if (intentCol >= 0) item.intentUri = cursor.getString(intentCol);
+                if (typeCol >= 0) item.type = cursor.getString(typeCol);
+                if (item.title != null && !item.title.trim().isEmpty()
+                        && item.poster != null && !item.poster.trim().isEmpty()) out.add(item);
+            }
+        } catch (Exception e) {
+            android.util.Log.w("TvHome", "App Top Shelf unavailable for " + pkg, e);
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        return out;
+    }
+
+    void loadAppPublishedTopShelf(AppEntry app) {
+        if (app == null || app.pkg == null || app.pkg.isEmpty() || appTopShelfBox == null) return;
+        final String pkg = app.pkg;
+        appTopShelfPkg = pkg;
+        final int generation = ++appTopShelfGeneration;
+        appTopShelfBox.animate().cancel();
+        appTopShelfBox.setVisibility(View.GONE);
+        appTopShelfBox.setAlpha(0f);
+        appTopShelfRow.removeAllViews();
+        appTopShelfCards.clear();
+        io.execute(() -> {
+            List<AppPublishedProgram> programs = queryAppPublishedPrograms(pkg);
+            handler.post(() -> {
+                if (generation != appTopShelfGeneration || !pkg.equals(appTopShelfPkg)
+                        || !classicAppPreviewShown || folderMode || shown.isEmpty()
+                        || focusedIndex < 0 || focusedIndex >= shown.size()
+                        || !pkg.equals(shown.get(focusedIndex).pkg)) return;
+                if (programs.isEmpty()) return;
+                hideClassicDashboard();
+                heroProvider.setVisibility(View.GONE);
+                heroLogo.setVisibility(View.GONE);
+                heroButton.setVisibility(View.GONE);
+                heroRemove.setVisibility(View.GONE);
+                updateAppTopShelfHero(programs.get(0), app);
+                int cardW = dp(132), cardH = dp(198), gap = dp(15);
+                for (int i = 0; i < programs.size(); i++) {
+                    final AppPublishedProgram program = programs.get(i);
+                    LinearLayout card = new LinearLayout(this);
+                    card.setOrientation(LinearLayout.VERTICAL);
+                    card.setFocusable(true);
+                    card.setFocusableInTouchMode(true);
+                    card.setClipChildren(false);
+                    card.setClipToPadding(false);
+                    android.graphics.drawable.GradientDrawable cardBg = new android.graphics.drawable.GradientDrawable();
+                    cardBg.setColor(0x261FFFFFF);
+                    cardBg.setCornerRadius(dp(9));
+                    card.setBackground(cardBg);
+                    card.setPadding(dp(3), dp(3), dp(3), dp(4));
+                    ImageView poster = new ImageView(this);
+                    poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                    poster.setBackgroundColor(0x331FFFFFF);
+                    android.graphics.drawable.GradientDrawable posterOutline = new android.graphics.drawable.GradientDrawable();
+                    posterOutline.setColor(Color.TRANSPARENT);
+                    posterOutline.setCornerRadius(dp(7));
+                    poster.setBackground(posterOutline);
+                    poster.setClipToOutline(true);
+                    card.addView(poster, new LinearLayout.LayoutParams(cardW - dp(6), cardH - dp(42)));
+                    TextView name = text(10f, Ui.font(this, "semibold"), 0.96f);
+                    name.setText(program.title);
+                    name.setMaxLines(2);
+                    name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    name.setGravity(Gravity.CENTER_VERTICAL);
+                    name.setPadding(dp(5), dp(3), dp(5), 0);
+                    card.addView(name, new LinearLayout.LayoutParams(cardW - dp(6), dp(36)));
+                    LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(cardW, cardH);
+                    if (i > 0) cardLp.leftMargin = gap;
+                    appTopShelfRow.addView(card, cardLp);
+                    appTopShelfCards.add(card);
+                    card.setOnFocusChangeListener((v, focused) -> {
+                        if (focused && pkg.equals(appTopShelfPkg) && classicAppPreviewShown) {
+                            updateAppTopShelfHero(program, app);
+                            appTopShelfScroll.smoothScrollTo(Math.max(0, v.getLeft() - dp(30)), 0);
+                        }
+                    });
+                    card.setOnClickListener(v -> openAppPublishedProgram(program, pkg));
+                    io.execute(() -> {
+                        Bitmap bitmap = Suggestions.image(this, program.poster, "w342", 360);
+                        if (bitmap != null) handler.post(() -> {
+                            if (generation == appTopShelfGeneration && poster.getParent() != null)
+                                poster.setImageBitmap(bitmap);
+                            else bitmap.recycle();
+                        });
+                    });
+                }
+                appTopShelfScroll.scrollTo(0, 0);
+                appTopShelfBox.setVisibility(View.VISIBLE);
+                appTopShelfBox.setAlpha(0f);
+                appTopShelfBox.setTranslationY(dp(10));
+                appTopShelfBox.animate().alpha(1f).translationY(0f).setDuration(260).setInterpolator(EASE).start();
+            });
+        });
+    }
+
+    void updateAppTopShelfHero(AppPublishedProgram program, AppEntry app) {
+        if (program == null) return;
+        heroTitle.setText(program.title == null ? "" : program.title);
+        heroMeta.setText(app.label == null ? appLabel(app.pkg) : app.label);
+        heroOverview.setText(program.description == null ? "" : program.description);
+        heroOverview.setVisibility(program.description == null || program.description.trim().isEmpty()
+                ? View.GONE : View.VISIBLE);
+        heroOverview.setMaxLines(3);
+        heroTitle.setVisibility(View.VISIBLE);
+        heroMeta.setVisibility(View.VISIBLE);
+    }
+
+    void openAppPublishedProgram(AppPublishedProgram program, String pkg) {
+        try {
+            if (program.intentUri != null && !program.intentUri.trim().isEmpty()) {
+                android.content.Intent intent = android.content.Intent.parseUri(program.intentUri, 0);
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                if (intent.resolveActivity(getPackageManager()) != null) {
+                    startActivity(intent);
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.w("TvHome", "Could not open published Top Shelf item", e);
+        }
+        android.content.Intent launch = getPackageManager().getLeanbackLaunchIntentForPackage(pkg);
+        if (launch == null) launch = getPackageManager().getLaunchIntentForPackage(pkg);
+        if (launch != null) startActivity(launch);
     }
 
     void hideClassicAppPreview() {
         if (!classicAppPreviewShown) return;
         classicAppPreviewShown = false;
+        appTopShelfGeneration++;
+        appTopShelfPkg = "";
+        if (appTopShelfBox != null) {
+            appTopShelfBox.animate().cancel();
+            appTopShelfBox.setAlpha(0f);
+            appTopShelfBox.setVisibility(View.GONE);
+        }
         if (heroFront != null) {
             heroFront.animate().cancel();
             heroFront.animate().alpha(0f).setDuration(160).withEndAction(() -> {
