@@ -7,7 +7,6 @@ if (-not $env:JAVA_HOME) {
         "C:\Program Files\Java\jdk-21",
         "C:\Program Files\Eclipse Adoptium\jdk-17*",
         "C:\Program Files\Microsoft\jdk-17*",
-        "C:\Users\asen4\AppData\Local\Programs\Microsoft\jdk-17.0.10.7-hotspot"
     )
     foreach ($cand in $jdkCandidates) {
         $found = Get-Item $cand -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -37,7 +36,7 @@ if ($LASTEXITCODE -ne 0) { throw "aapt2 compile failed" }
 
 & "$BT\aapt2.exe" link -o build\unsigned.apk -I "$JAR" --manifest AndroidManifest.xml `
     --java build\gen --min-sdk-version 23 --target-sdk-version 34 `
-    --version-code 17 --version-name "2.2.5" build\res.zip
+    --version-code $versionCode --version-name $versionName build\res.zip
 if ($LASTEXITCODE -ne 0) { throw "aapt2 link failed" }
 
 $javaFiles = Get-ChildItem -Recurse -Path src, build\gen -Filter "*.java" | Select-Object -ExpandProperty FullName
@@ -86,8 +85,16 @@ if (-not (Test-Path $KS)) {
         -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=tvOS Launcher debug" | Out-Null
 }
 
-& "$BT\apksigner.bat" sign --ks $KS --ks-pass pass:android --key-pass pass:android `
-    --out build\tvos-home.apk build\aligned.apk
-if ($LASTEXITCODE -ne 0) { throw "apksigner failed" }
+if ($env:RELEASE_KEYSTORE) {
+    if (-not $env:RELEASE_KEYSTORE_PASS) { throw "Set RELEASE_KEYSTORE_PASS when RELEASE_KEYSTORE is configured." }
+    $alias = if ($env:RELEASE_KEY_ALIAS) { $env:RELEASE_KEY_ALIAS } else { "tvos-release" }
+    & "$BT\apksigner.bat" sign --ks $env:RELEASE_KEYSTORE --ks-pass "env:RELEASE_KEYSTORE_PASS" --ks-key-alias $alias --out build\tvos-home.apk build\aligned.apk
+    if ($LASTEXITCODE -ne 0) { throw "Release APK signing failed" }
+    Write-Host "Signed with the release key"
+} else {
+    & "$BT\apksigner.bat" sign --ks $KS --ks-pass pass:android --key-pass pass:android --out build\tvos-home.apk build\aligned.apk
+    if ($LASTEXITCODE -ne 0) { throw "Debug APK signing failed" }
+    Write-Host "Signed with the local debug key"
+}
 
 Write-Host "Built build\tvos-home.apk"
