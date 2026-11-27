@@ -296,6 +296,13 @@ public class SettingsActivity extends Activity {
         sideCol.setOrientation(LinearLayout.VERTICAL);
         sideCol.setClipChildren(false);
         sideCol.setClipToPadding(false);
+        GradientDrawable sideSurface = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0x70262B36, 0x59171B24});
+        sideSurface.setCornerRadius(u(25));
+        sideSurface.setStroke(Math.max(1, u(1)), 0x2EFFFFFF);
+        sideCol.setBackground(sideSurface);
+        sideCol.setPadding(u(8), u(10), u(8), u(10));
         LinearLayout.LayoutParams sideLp = new LinearLayout.LayoutParams(u(288), ViewGroup.LayoutParams.MATCH_PARENT);
         sideLp.setMarginEnd(u(26));
         columns.addView(sideCol, sideLp);
@@ -329,6 +336,14 @@ public class SettingsActivity extends Activity {
         mainCol.setOrientation(LinearLayout.VERTICAL);
         mainCol.setClipChildren(true);
         mainCol.setClipToPadding(true);
+        GradientDrawable mainSurface = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0x6B202630, 0x5212161E});
+        mainSurface.setCornerRadius(u(27));
+        mainSurface.setStroke(Math.max(1, u(1)), 0x30FFFFFF);
+        mainCol.setBackground(mainSurface);
+        mainCol.setPadding(u(14), u(10), u(14), u(12));
+        mainCol.setClipToOutline(true);
         columns.addView(mainCol, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
 
         mainHeadView = new TextView(this);
