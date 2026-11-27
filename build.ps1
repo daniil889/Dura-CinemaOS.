@@ -112,4 +112,7 @@ if ($env:RELEASE_KEYSTORE) {
 & "$BT\apksigner.bat" verify --verbose build\tvos-home.apk
 if ($LASTEXITCODE -ne 0) { throw "APK signature verification failed" }
 
+& "$BT\zipalign.exe" -c -v 4 build\tvos-home.apk
+if ($LASTEXITCODE -ne 0) { throw "APK alignment verification failed" }
+
 Write-Host "Built build\tvos-home.apk"
