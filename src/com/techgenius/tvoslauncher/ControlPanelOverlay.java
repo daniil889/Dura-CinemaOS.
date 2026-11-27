@@ -600,7 +600,7 @@ public final class ControlPanelOverlay {
         int y4 = contentTop + (capsuleRows > 0 ? capsuleRows * (cap + gap) : 0);
 
         String[] itemKeys = {ITEM_INPUTS, ITEM_MAPPER, ITEM_SETTINGS, ITEM_SEARCH, ITEM_REFRESH, ITEM_BRIGHTNESS};
-        String[] icons = {"input", "remote", "gear", "search", "refresh", "sun"};
+        String[] icons = {"input", "remote", "gear", "search", "refresh", "sliders"};
         Runnable[] actions = {onInputs, onButtonMapper, onSettings, onSearch, onRefresh, () -> DisplayBrightness.show(c)};
         List<Integer> enabledSmallIdx = new ArrayList<>();
         for (int i = 0; i < itemKeys.length; i++) {
