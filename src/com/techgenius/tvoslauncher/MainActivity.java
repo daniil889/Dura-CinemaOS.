@@ -2983,32 +2983,9 @@ public class MainActivity extends Activity {
         showClassicCwForPackage(a.pkg);
     }
 
-    /** Strict allow-list: known streaming apps, including YouTube when it publishes TV content rows. */
+    /** Media eligibility is kept separate from the Activity; content itself is never fabricated. */
     boolean isStreamingPlatform(AppEntry app) {
-        if (app == null || app.pkg == null) return false;
-        String pkg = app.pkg.toLowerCase(java.util.Locale.ROOT);
-        String label = app.label == null ? "" : app.label.toLowerCase(java.util.Locale.ROOT);
-        if (pkg.contains("browser") || label.contains("browser")) return false;
-        // Exact service identifiers avoid accidental matches such as "activity" containing "ivi".
-        if (pkg.contains("youtube") || label.contains("youtube")
-                || pkg.contains("kinopoisk") || label.contains("кинопоиск")
-                || pkg.startsWith("ru.ivi") || label.equals("ivi") || label.startsWith("ivi ")
-                || pkg.contains("okko") || label.contains("okko")
-                || pkg.contains("zona") || label.contains("zona")
-                || pkg.contains("rutube") || label.contains("rutube")
-                || pkg.contains("netflix") || label.contains("netflix")
-                || pkg.contains("amazonvideo") || pkg.contains("primevideo") || label.contains("prime video")
-                || pkg.contains("disney") || label.contains("disney+")
-                || pkg.contains("appletv") || label.equals("apple tv")
-                || pkg.contains("hbomax") || label.equals("max") || label.startsWith("max ")
-                || pkg.contains("hulu") || label.equals("hulu")
-                || pkg.contains("paramount") || label.contains("paramount")
-                || pkg.contains("peacock") || label.contains("peacock")
-                || pkg.contains("crunchyroll") || label.contains("crunchyroll")
-                || pkg.contains("hotstar") || label.contains("hotstar")
-                || pkg.contains("zee5") || label.contains("zee5")
-                || pkg.contains("sonyliv") || label.contains("sonyliv")) return true;
-        return false;
+        return app != null && StreamingPlatformRegistry.isSupported(app.pkg, app.label);
     }
 
     /** Shows a lightweight app-specific Top Shelf scene when the app has no Continue Watching row. */
