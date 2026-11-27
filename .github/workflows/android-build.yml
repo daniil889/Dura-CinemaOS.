@@ -1,0 +1,54 @@
+name: Android build
+
+on:
+  push:
+    branches: [main, "audit/**", "feature/**", "fix/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build APK (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platform-tools" "build-tools;34.0.0" "build-tools;35.0.0" "platforms;android-34"
+
+      - name: Build APK (Linux)
+        if: runner.os != 'Windows'
+        run: bash ./build.sh
+
+      - name: Build APK (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./build.ps1
+
+      - name: Verify APK exists
+        shell: bash
+        run: test -s build/tvos-home.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tvos-home-${{ runner.os }}
+          path: build/tvos-home.apk
+          if-no-files-found: error
