@@ -27,7 +27,7 @@ brew install --cask temurin@17                      # JDK 17 (или любой 
 brew install --cask android-commandlinetools        # sdkmanager
 export ANDROID_HOME="$HOME/Library/Android/sdk"
 yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses
-sdkmanager --sdk_root="$ANDROID_HOME" "platform-tools" "build-tools;34.0.0" "platforms;android-34"
+sdkmanager --sdk_root="$ANDROID_HOME" "platform-tools" "build-tools;34.0.0" "build-tools;35.0.0" "platforms;android-34"
 ```
 
 ### Linux (Debian/Ubuntu)
