@@ -216,6 +216,8 @@ public class MainActivity extends Activity {
     int focusedIndex = 0;
     int moveIndex = -1;
     boolean folderMode;
+    FrameLayout appFolderOverlay;
+    View folderReturnFocus;
     public boolean resumed;
     /** Package of the last app the launcher opened; read and cleared on the next resume. */
     String lastLaunchedPkg;
@@ -434,6 +436,7 @@ public class MainActivity extends Activity {
         // Home pressed while already on the home screen: jump back to the top of the home grid.
         if (moveIndex >= 0) endMove();
         if (folderMode) {
+            if (appFolderOverlay != null) closeAppFolderOverlay(false);
             folderMode = false;
             switcher.setAlpha(1f);
             weatherCard.setAlpha(weatherAlpha());
@@ -3815,40 +3818,193 @@ public class MainActivity extends Activity {
         return b;
     }
 
+    /** Opens the overflow collection as a centered tvOS-style folder sheet. */
     void enterFolder() {
-        if (effectiveOtherApps.isEmpty()) return;
-        animateGridSwap(() -> {
-            folderMode = true;
-            setHeroShown(false);
-            hideClassicCw();
-            hideClassicDashboard();
-            if (!Scenes.isScenesLook(this) && Scenes.isClassicBigClockEnabled(this) && sceneHome != null) {
-                sceneHome.sceneView.setAlpha(0f);
+        if (effectiveOtherApps.isEmpty() || appFolderOverlay != null) return;
+        folderReturnFocus = getCurrentFocus();
+        folderMode = true;
+        setHeroShown(false);
+        hideClassicCw();
+        hideClassicDashboard();
+        if (!Scenes.isScenesLook(this) && Scenes.isClassicBigClockEnabled(this) && sceneHome != null) {
+            sceneHome.sceneView.setAlpha(0f);
+        }
+        if (switcher != null) switcher.setAlpha(0f);
+        if (weatherCard != null) weatherCard.setAlpha(0f);
+        if (shelfEmpty != null) shelfEmpty.setAlpha(0f);
+
+        FrameLayout overlay = new FrameLayout(this);
+        overlay.setFocusable(true);
+        overlay.setBackgroundColor(0x99060910);
+        overlay.setAlpha(0f);
+        overlay.setOnClickListener(v -> exitFolder());
+
+        int panelW = Math.min(screenW - dp(64), dp(900));
+        int panelH = Math.min(screenH - dp(64), dp(650));
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(28), dp(22), dp(28), dp(22));
+        panel.setBackground(folderPanelBackground());
+        panel.setElevation(dp(28));
+        panel.setOnClickListener(v -> { /* consume clicks inside the folder surface */ });
+        FrameLayout.LayoutParams panelLp = new FrameLayout.LayoutParams(panelW, panelH, Gravity.CENTER);
+        overlay.addView(panel, panelLp);
+
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.VERTICAL);
+        header.setPadding(dp(4), dp(0), dp(4), dp(18));
+        TextView title = text(27, Ui.font(this, "display"), 1f);
+        title.setText(I18n.s(this, "Other Apps", "Diğer Uygulamalar"));
+        title.setSingleLine(true);
+        TextView subtitle = text(13, Ui.font(this, "regular"), 0.62f);
+        subtitle.setText(I18n.count(this, effectiveOtherApps.size(), "app", "apps",
+                "uygulama", "uygulama", "приложение", "приложения", "приложений")
+                + "  ·  " + I18n.s(this, "Press Back to close", "Kapatmak için Geri"));
+        subtitle.setSingleLine(true);
+        header.addView(title);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        subLp.topMargin = dp(4);
+        header.addView(subtitle, subLp);
+        panel.addView(header);
+
+        ScrollView gridScroll = new ScrollView(this);
+        gridScroll.setFillViewport(false);
+        gridScroll.setVerticalScrollBarEnabled(false);
+        gridScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        LinearLayout grid = new LinearLayout(this);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        grid.setClipChildren(false);
+        grid.setClipToPadding(false);
+        int columns = 5;
+        LinearLayout gridRow = null;
+        for (int i = 0; i < effectiveOtherApps.size(); i++) {
+            if (i % columns == 0) {
+                gridRow = new LinearLayout(this);
+                gridRow.setOrientation(LinearLayout.HORIZONTAL);
+                gridRow.setGravity(Gravity.TOP);
+                gridRow.setClipChildren(false);
+                gridRow.setClipToPadding(false);
+                if (i > 0) {
+                    LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    rowLp.topMargin = dp(12);
+                    grid.addView(gridRow, rowLp);
+                } else {
+                    grid.addView(gridRow);
+                }
             }
-            switcher.setAlpha(0f);
-            weatherCard.setAlpha(0f);
-            shelfEmpty.setAlpha(0f);
-            buildGrid();
-            shelfEntry = null;
-            scroll.scrollTo(0, 0);
-            focusIndex(0);
-        });
+            final AppEntry app = effectiveOtherApps.get(i);
+            LinearLayout item = new LinearLayout(this);
+            item.setOrientation(LinearLayout.VERTICAL);
+            item.setGravity(Gravity.CENTER);
+            item.setFocusable(true);
+            item.setClickable(true);
+            item.setPadding(dp(7), dp(8), dp(7), dp(6));
+            GradientDrawable itemBg = new GradientDrawable();
+            itemBg.setColor(0x001FFFFFFF);
+            itemBg.setCornerRadius(dp(18));
+            itemBg.setStroke(Math.max(1, dp(1)), 0x00FFFFFF);
+            item.setBackground(itemBg);
+
+            FrameLayout iconSurface = new FrameLayout(this);
+            GradientDrawable iconBg = new GradientDrawable(
+                    GradientDrawable.Orientation.TOP_BOTTOM,
+                    new int[]{0xFF303541, 0xFF1C202A});
+            iconBg.setCornerRadius(dp(19));
+            iconSurface.setBackground(iconBg);
+            ImageView icon = new ImageView(this);
+            icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            Drawable appIcon = app.icon != null ? app.icon : app.banner;
+            if (appIcon != null) icon.setImageDrawable(appIcon);
+            int iconSize = dp(58);
+            FrameLayout.LayoutParams iconLp = new FrameLayout.LayoutParams(iconSize, iconSize, Gravity.CENTER);
+            iconSurface.addView(icon, iconLp);
+            item.addView(iconSurface, new LinearLayout.LayoutParams(dp(88), dp(88)));
+
+            TextView label = text(13, Ui.font(this, "medium"), 0.92f);
+            label.setText(app.label);
+            label.setGravity(Gravity.CENTER);
+            label.setMaxLines(2);
+            label.setEllipsize(TextUtils.TruncateAt.END);
+            LinearLayout.LayoutParams labelLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(38));
+            labelLp.topMargin = dp(7);
+            item.addView(label, labelLp);
+
+            item.setOnFocusChangeListener((v, focused) -> {
+                itemBg.setColor(focused ? 0x2EFFFFFF : 0x001FFFFFFF);
+                itemBg.setStroke(Math.max(1, dp(1)), focused ? 0x88FFFFFF : 0x00FFFFFF);
+                iconBg.setColor(focused ? 0xFF414958 : 0xFF252A35);
+                v.animate().scaleX(focused ? 1.08f : 1f).scaleY(focused ? 1.08f : 1f)
+                        .translationZ(focused ? dp(12) : 0)
+                        .setDuration(focused ? 180 : 140).setInterpolator(LIFT).start();
+                label.setTextColor(focused ? Color.WHITE : 0xD9FFFFFF);
+            });
+            item.setOnClickListener(v -> {
+                View origin = folderReturnFocus;
+                closeAppFolderOverlay(false);
+                if (origin != null) launchAnimated(origin, app);
+                else if (app.launch != null) Suggestions.start(this, app.launch);
+            });
+            LinearLayout.LayoutParams itemLp = new LinearLayout.LayoutParams(0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            if (i % columns != 0) itemLp.leftMargin = dp(8);
+            gridRow.addView(item, itemLp);
+        }
+        gridScroll.addView(grid, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        panel.addView(gridScroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        appFolderOverlay = overlay;
+        root.addView(overlay, match());
+        overlay.animate().alpha(1f).setDuration(180).setInterpolator(EASE).start();
+        View first = grid.getChildCount() > 0 && ((LinearLayout) grid.getChildAt(0)).getChildCount() > 0
+                ? ((LinearLayout) grid.getChildAt(0)).getChildAt(0) : null;
+        if (first != null) first.requestFocus();
+    }
+
+    private GradientDrawable folderPanelBackground() {
+        GradientDrawable bg = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0xF2262B36, 0xF0181C25});
+        bg.setCornerRadius(dp(28));
+        bg.setStroke(Math.max(1, dp(1)), 0x44FFFFFF);
+        return bg;
+    }
+
+    void closeAppFolderOverlay(boolean restoreFocus) {
+        View restore = folderReturnFocus;
+        FrameLayout overlay = appFolderOverlay;
+        appFolderOverlay = null;
+        folderMode = false;
+        folderReturnFocus = null;
+        if (overlay != null) {
+            overlay.animate().alpha(0f).setDuration(130).setInterpolator(EASE)
+                    .withEndAction(() -> {
+                        if (overlay.getParent() == root) root.removeView(overlay);
+                    }).start();
+        }
+        if (!Scenes.isScenesLook(this) && Scenes.isClassicBigClockEnabled(this) && sceneHome != null) {
+            sceneHome.sceneView.animate().alpha(clockAlpha()).setDuration(180).start();
+        }
+        if (switcher != null) switcher.animate().alpha(1f).setDuration(180).start();
+        if (weatherCard != null) weatherCard.animate().alpha(weatherAlpha()).setDuration(180).start();
+        if (shelfEmpty != null) shelfEmpty.animate().alpha(1f).setDuration(180).start();
+        if (restoreFocus) {
+            handler.postDelayed(() -> {
+                if (restore != null && restore.getParent() != null) restore.requestFocus();
+                else {
+                    int idx = indexOfKey(FOLDER_KEY);
+                    focusIndex(idx >= 0 ? idx : 0);
+                }
+            }, 150);
+        }
     }
 
     void exitFolder() {
-        animateGridSwap(() -> {
-            folderMode = false;
-            if (!Scenes.isScenesLook(this) && Scenes.isClassicBigClockEnabled(this) && sceneHome != null) {
-                sceneHome.sceneView.animate().alpha(clockAlpha()).setDuration(250).start();
-            }
-            switcher.animate().alpha(1f).setDuration(250).start();
-            weatherCard.animate().alpha(weatherAlpha()).setDuration(250).start();
-            buildGrid();
-            shelfEntry = null;
-            int i = indexOfKey(FOLDER_KEY);
-            focusIndex(i >= 0 ? i : 0);
-            syncClassicTopShelfForIndex(focusedIndex);
-        });
+        closeAppFolderOverlay(true);
     }
 
     /** Quick zoom-through between home and folder, so it reads as "opening" the folder. */
@@ -3942,6 +4098,15 @@ public class MainActivity extends Activity {
                 if (ev.getAction() == KeyEvent.ACTION_UP) closeMenu();
                 return true;
             }
+            return super.dispatchKeyEvent(ev);
+        }
+        if (appFolderOverlay != null) {
+            int fk = ev.getKeyCode();
+            if (fk == KeyEvent.KEYCODE_BACK || fk == KeyEvent.KEYCODE_ESCAPE) {
+                if (ev.getAction() == KeyEvent.ACTION_UP) exitFolder();
+                return true;
+            }
+            if (fk == KeyEvent.KEYCODE_MENU) return true;
             return super.dispatchKeyEvent(ev);
         }
         if (sceneHome != null && sceneHome.isSheetOpen()) {
