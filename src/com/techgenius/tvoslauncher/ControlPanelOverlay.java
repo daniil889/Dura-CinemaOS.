@@ -443,7 +443,8 @@ public final class ControlPanelOverlay {
             Runnable onInputs,
             Runnable onButtonMapper,
             Runnable onSettings,
-            Runnable onSearch) {
+            Runnable onSearch,
+            Runnable onRefresh) {
 
         int col = dp(unit, 141);
         int gap = dp(unit, 11);
@@ -552,9 +553,9 @@ public final class ControlPanelOverlay {
         int capsuleRows = (capsules.size() + 1) / 2;
         int y4 = capsuleRows > 0 ? capsuleRows * (cap + gap) : 0;
 
-        String[] itemKeys = {ITEM_INPUTS, ITEM_MAPPER, ITEM_SETTINGS, ITEM_SEARCH};
-        String[] icons = {"input", "remote", "gear", "search"};
-        Runnable[] actions = {onInputs, onButtonMapper, onSettings, onSearch};
+        String[] itemKeys = {ITEM_INPUTS, ITEM_MAPPER, ITEM_SETTINGS, ITEM_SEARCH, ITEM_REFRESH};
+        String[] icons = {"input", "remote", "gear", "search", "refresh"};
+        Runnable[] actions = {onInputs, onButtonMapper, onSettings, onSearch, onRefresh};
         List<Integer> enabledSmallIdx = new ArrayList<>();
         for (int i = 0; i < itemKeys.length; i++) {
             if (isItemEnabled(c, itemKeys[i])) {
@@ -565,17 +566,20 @@ public final class ControlPanelOverlay {
             // Never allow a completely empty panel; keep Settings accessible
             enabledSmallIdx.add(2);
         }
+        int smallRows = (enabledSmallIdx.size() + 3) / 4;
         for (int sIdx = 0; sIdx < enabledSmallIdx.size(); sIdx++) {
             int i = enabledSmallIdx.get(sIdx);
             final Runnable act = actions[i];
-            outCells.add(makeTile(c, panel, pad + sIdx * (small + gap), pad + y4, small, small, unit, screenW, screenH, glassSource,
+            int smallX = pad + (sIdx % 4) * (small + gap);
+            int smallY = pad + y4 + (sIdx / 4) * (small + gap);
+            outCells.add(makeTile(c, panel, smallX, smallY, small, small, unit, screenW, screenH, glassSource,
                     icons[i], null, null, v -> {
                         if (act != null) act.run();
                     }));
         }
 
         int totalH = !enabledSmallIdx.isEmpty()
-                ? (y4 + small)
+                ? (y4 + smallRows * small + Math.max(0, smallRows - 1) * gap)
                 : Math.max(0, capsuleRows * (cap + gap) - gap);
 
         if (isItemEnabled(c, ITEM_WEATHER_PANEL)) {
@@ -1267,6 +1271,7 @@ public final class ControlPanelOverlay {
     public static final String ITEM_MAPPER = "mapper";
     public static final String ITEM_SETTINGS = "settings";
     public static final String ITEM_SEARCH = "search";
+    public static final String ITEM_REFRESH = "refresh";
     public static final String ITEM_WEATHER_PANEL = "weather_panel";
 
     public static final String[][] ALL_CP_ITEMS = {
@@ -1283,6 +1288,7 @@ public final class ControlPanelOverlay {
         {ITEM_MAPPER, "Button Mapper Shortcut", "Tuş Atayıcı Kısayolu"},
         {ITEM_SETTINGS, "Settings Shortcut", "Ayarlar Kısayolu"},
         {ITEM_SEARCH, "Search / Assistant Shortcut", "Arama / Asistan Kısayolu"},
+        {ITEM_REFRESH, "Refresh Home Content", "Ana Ekran İçeriğini Yenile"},
         {ITEM_WEATHER_PANEL, "Weather Panel (Current & Tomorrow)", "Hava Durumu Paneli (Şimdi ve Yarın)"}
     };
 
