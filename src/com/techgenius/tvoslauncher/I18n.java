@@ -42,6 +42,7 @@ public final class I18n {
     public static final String LANG_HE = "he";
 
     public static final String[][] LANGUAGES = {
+        {LANG_RU, "Русский", "Использовать tvOS Launcher на русском"},
         {LANG_EN, "English", "Use tvOS Launcher in English"},
         {LANG_TR, "Türkçe", "tvOS Launcher'ı Türkçe kullanın"},
         {LANG_AZ, "Azərbaycan dili", "tvOS Launcher-i Azərbaycan dilində istifadə edin"},
@@ -51,7 +52,6 @@ public final class I18n {
         {LANG_FR, "Français", "Utiliser tvOS Launcher en français"},
         {LANG_DE, "Deutsch", "tvOS Launcher auf Deutsch verwenden"},
         {LANG_IT, "Italiano", "Usa tvOS Launcher in italiano"},
-        {LANG_RU, "Русский", "Использовать tvOS Launcher на русском"},
         {LANG_PT, "Português (Portugal)", "Usar o tvOS Launcher em português (Portugal)"},
         {LANG_PT_BR, "Português (Brasil)", "Usar o tvOS Launcher em português do Brasil"},
         {LANG_PL, "Polski", "Użyj tvOS Launcher w języku polskim"},
