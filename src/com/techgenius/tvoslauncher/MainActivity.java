@@ -861,14 +861,6 @@ public class MainActivity extends Activity {
             if (has) onClassicNonAppFocused();
         });
         vpnButton.setOnClickListener(v -> openVpnSettings());
-        vpnButton.setOnKeyListener((v, keyCode, event) -> {
-            if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)
-                    && event.getAction() == KeyEvent.ACTION_UP) {
-                openVpnSettings();
-                return true;
-            }
-            return false;
-        });
         vpnButton.setContentDescription(I18n.s(this, "VPN settings", "VPN ayarları"));
 
         // Classic Big Clock Weather Shortcut button in top-right status row (when Big Clock is enabled on Classic look)
@@ -4511,6 +4503,15 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent ev) {
+        // The global button mapper can consume OK before Android dispatches it to the focused
+        // status shortcut. Route OK directly for the home-screen VPN button.
+        if (ev != null && vpnButton != null && vpnButton.hasFocus()
+                && (ev.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER
+                    || ev.getKeyCode() == KeyEvent.KEYCODE_ENTER)
+                && ev.getAction() == KeyEvent.ACTION_UP) {
+            openVpnSettings();
+            return true;
+        }
         if (ambientShowcase) {
             if (ev == null) return true;
             int action = ev.getAction();
