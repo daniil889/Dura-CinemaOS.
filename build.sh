@@ -46,7 +46,7 @@ else
     KS=debug.keystore
     if [ ! -f "$KS" ]; then
         keytool -genkeypair -keystore "$KS" -storepass android -keypass android -alias debug \
-            -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=tvOS Launcher debug" >/dev/null
+            -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=tvOS Launcher debug" -noprompt >/dev/null
     fi
     "$BT/apksigner" sign --ks "$KS" --ks-pass pass:android --key-pass pass:android \
         --out build/tvos-home.apk build/aligned.apk
