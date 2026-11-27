@@ -2806,6 +2806,7 @@ public class MainActivity extends Activity {
 
     static final class AppPublishedProgram {
         String title = "", description = "", poster = "", intentUri = "", type = "";
+        Suggestions.Item sourceItem;
     }
 
     LinearLayout classicCwBox, classicCwRow;
@@ -3086,6 +3087,38 @@ public class MainActivity extends Activity {
         appTopShelfCards.clear();
         io.execute(() -> {
             List<AppPublishedProgram> programs = queryAppPublishedPrograms(pkg);
+            // Fallback order: app-published TV preview rows, genuine playback history, then
+            // provider-specific public catalogue adapters. Never invent programme metadata.
+            if (programs.isEmpty()) {
+                List<Suggestions.Item> playback = MediaWatchService.Store.listForPackage(this, pkg, 12);
+                for (Suggestions.Item item : playback) {
+                    if (item == null || item.title == null || item.title.trim().isEmpty()
+                            || item.backdrop == null || item.backdrop.trim().isEmpty()) continue;
+                    AppPublishedProgram row = new AppPublishedProgram();
+                    row.title = item.title;
+                    row.description = item.overview == null ? "" : item.overview;
+                    row.poster = item.backdrop;
+                    row.intentUri = item.link == null ? "" : item.link;
+                    row.type = item.type == null ? "" : item.type;
+                    row.sourceItem = item;
+                    programs.add(row);
+                }
+            }
+            if (programs.isEmpty()) {
+                List<Suggestions.Item> catalogue = StreamingCatalog.fetchForPackage(this, pkg, 12);
+                for (Suggestions.Item item : catalogue) {
+                    if (item == null || item.title == null || item.title.trim().isEmpty()
+                            || item.backdrop == null || item.backdrop.trim().isEmpty()) continue;
+                    AppPublishedProgram row = new AppPublishedProgram();
+                    row.title = item.title;
+                    row.description = item.overview == null ? "" : item.overview;
+                    row.poster = item.backdrop;
+                    row.intentUri = item.link == null ? "" : item.link;
+                    row.type = item.type == null ? "" : item.type;
+                    row.sourceItem = item;
+                    programs.add(row);
+                }
+            }
             handler.post(() -> {
                 if (generation != appTopShelfGeneration || !pkg.equals(appTopShelfPkg)
                         || !classicAppPreviewShown || folderMode || shown.isEmpty()
@@ -3223,6 +3256,10 @@ public class MainActivity extends Activity {
     }
 
     void openAppPublishedProgram(AppPublishedProgram program, String pkg) {
+        if (program != null && program.sourceItem != null) {
+            openHeroItem(program.sourceItem);
+            return;
+        }
         try {
             if (program.intentUri != null && !program.intentUri.trim().isEmpty()) {
                 android.content.Intent intent = android.content.Intent.parseUri(program.intentUri, 0);
