@@ -339,7 +339,9 @@ public final class Scenes {
     }
 
     public static String getLook(Context c) {
-        return prefs(c).getString("look_mode", LOOK_SCENES);
+        // The classic app-grid + Top Shelf layout is the closest match to the Apple TV home screen.
+        // Keep an explicitly saved user choice untouched; this only changes the first-run default.
+        return prefs(c).getString("look_mode", LOOK_CLASSIC);
     }
 
     public static boolean isScenesLook(Context c) {
@@ -655,7 +657,8 @@ public final class Scenes {
     // ─── Classic Appearance Big Clock & Clock Alignment ───
 
     public static boolean isClassicBigClockEnabled(Context c) {
-        return prefs(c).getBoolean("classic_big_clock", true);
+        // tvOS keeps the status time compact in the top bar; the oversized clock remains optional.
+        return prefs(c).getBoolean("classic_big_clock", false);
     }
 
     public static void setClassicBigClockEnabled(Context c, boolean enabled) {

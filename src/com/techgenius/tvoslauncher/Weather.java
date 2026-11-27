@@ -226,13 +226,43 @@ final class Weather {
     }
 
     private static boolean busy;
+    private static final List<Runnable> pendingRefreshCallbacks = new ArrayList<>();
 
-    /** Fetches in the background when the cache is due; {@code done} runs on the main thread. */
+    /**
+     * Refreshes the forecast off the UI thread. Every caller receives its completion callback,
+     * including callers that hit a fresh cache or join an already-running request. Previously
+     * those paths returned silently, leaving WeatherView stuck in its loading state.
+     */
     static void refresh(Context ctx, boolean force, Runnable done) {
-        Context c = ctx.getApplicationContext();
-        if (!enabled(c) || busy || (!force && !stale(c))) return;
-        busy = true;
-        Handler main = new Handler(Looper.getMainLooper());
+        final Context c = ctx.getApplicationContext();
+        final Handler main = new Handler(Looper.getMainLooper());
+        final List<Runnable> immediate = new ArrayList<>();
+        boolean startFetch = false;
+
+        synchronized (Weather.class) {
+            if (done != null) pendingRefreshCallbacks.add(done);
+            if (busy) {
+                return;
+            }
+            if (!enabled(c) || (!force && !stale(c))) {
+                immediate.addAll(pendingRefreshCallbacks);
+                pendingRefreshCallbacks.clear();
+            } else {
+                busy = true;
+                startFetch = true;
+            }
+        }
+
+        if (!immediate.isEmpty()) {
+            main.post(() -> {
+                for (Runnable callback : immediate) {
+                    try { callback.run(); } catch (Throwable ignored) { }
+                }
+            });
+            return;
+        }
+        if (!startFetch) return;
+
         new Thread(() -> {
             try {
                 SharedPreferences p = prefs(c);
@@ -249,19 +279,19 @@ final class Weather {
                     lon = ll[1];
                 }
                 boolean f = units(c).equals("f");
-                // The chosen source first, then the others.
                 List<String> order = new ArrayList<>();
                 order.add(source(c));
                 for (String s : SOURCES) if (!order.contains(s)) order.add(s);
                 Data d = null;
                 for (String s : order) {
                     try {
-                        d = s.equals(SRC_MET) ? fetchMet(lat, lon, f) : s.equals(SRC_WTTR) ? fetchWttr(lat, lon, f)
+                        d = s.equals(SRC_MET) ? fetchMet(lat, lon, f)
+                                : s.equals(SRC_WTTR) ? fetchWttr(lat, lon, f)
                                 : fetchOpenMeteo(lat, lon, f);
                         d.source = s;
                         break;
                     } catch (Exception ignored) {
-                        // try the next source
+                        // Try the next configured provider.
                     }
                 }
                 if (d != null) {
@@ -270,14 +300,22 @@ final class Weather {
                     p.edit().putString(K_CACHE, d.toJson().toString()).putString(K_PLACE, d.place)
                             .putLong(K_CACHE_AT, d.fetchedAt).putString(K_CACHE_KEY, key(c)).apply();
                 }
-            } catch (Exception ignored) {
-                // Keep showing the last forecast.
+            } catch (Throwable ignored) {
+                // Preserve the last successful forecast if all providers fail.
+            } finally {
+                final List<Runnable> callbacks;
+                synchronized (Weather.class) {
+                    busy = false;
+                    callbacks = new ArrayList<>(pendingRefreshCallbacks);
+                    pendingRefreshCallbacks.clear();
+                }
+                main.post(() -> {
+                    for (Runnable callback : callbacks) {
+                        try { callback.run(); } catch (Throwable ignored) { }
+                    }
+                });
             }
-            main.post(() -> {
-                busy = false;
-                if (done != null) done.run();
-            });
-        }).start();
+        }, "Dura-Weather-Refresh").start();
     }
 
     // ---------------------------------------------------------------- sources

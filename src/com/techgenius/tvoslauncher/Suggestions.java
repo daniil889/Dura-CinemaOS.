@@ -32,7 +32,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Top-shelf suggestions: what's popular in India on the user's streaming services, from TMDB
+ * Top-shelf suggestions: what's popular in the selected region on the user's streaming services, from TMDB
  * (themoviedb.org). Results and artwork are cached on disk; everything here runs off the UI thread.
  */
 final class Suggestions {
@@ -349,8 +349,10 @@ final class Suggestions {
                         .put("packages", new JSONArray().put(p.jwShort))
                         .put("objectTypes", new JSONArray().put(kind.equals("tv") ? "SHOW" : "MOVIE"))
                         .put("monetizationTypes", new JSONArray().put("FLATRATE").put("FREE").put("ADS"));
-                JSONObject vars = new JSONObject().put("country", "IN").put("language", "en")
-                        .put("first", POOL).put("filter", filter);
+                String jwLanguage = I18n.getLang(c);
+                if (jwLanguage == null || !jwLanguage.matches("[a-zA-Z]{2}")) jwLanguage = "en";
+                JSONObject vars = new JSONObject().put("country", StreamingCatalog.region(c))
+                        .put("language", jwLanguage).put("first", POOL).put("filter", filter);
                 JSONObject body = new JSONObject().put("query", JW_QUERY).put("variables", vars);
                 JSONObject res = post("https://apis.justwatch.com/graphql", body.toString());
                 JSONArray edges = res.getJSONObject("data").getJSONObject("popularTitles").getJSONArray("edges");
@@ -388,6 +390,61 @@ final class Suggestions {
             }
         }
         return sources;
+    }
+
+    /** Fetches public JustWatch discovery cards for one installed service, independent of global mix settings. */
+    static List<Item> fetchJustWatchForProvider(Context c, Provider p, int limit) throws Exception {
+        List<Item> out = new ArrayList<>();
+        if (c == null || p == null || p.jwShort == null || p.jwShort.isEmpty()) return out;
+        String t = types(c);
+        List<String> kinds = t.equals("both") ? Arrays.asList("tv", "movie") : Arrays.asList(t);
+        String jwLanguage = I18n.getLang(c);
+        if (jwLanguage == null || !jwLanguage.matches("[a-zA-Z]{2}")) jwLanguage = "en";
+        for (String kind : kinds) {
+            JSONObject filter = new JSONObject()
+                    .put("packages", new JSONArray().put(p.jwShort))
+                    .put("objectTypes", new JSONArray().put(kind.equals("tv") ? "SHOW" : "MOVIE"))
+                    .put("monetizationTypes", new JSONArray().put("FLATRATE").put("FREE").put("ADS"));
+            JSONObject vars = new JSONObject().put("country", StreamingCatalog.region(c))
+                    .put("language", jwLanguage).put("first", Math.min(POOL, Math.max(1, limit)))
+                    .put("filter", filter);
+            JSONObject body = new JSONObject().put("query", JW_QUERY).put("variables", vars);
+            JSONObject res = post("https://apis.justwatch.com/graphql", body.toString());
+            JSONArray edges = res.getJSONObject("data").getJSONObject("popularTitles").getJSONArray("edges");
+            for (int i = 0; i < edges.length() && out.size() < limit; i++) {
+                JSONObject node = edges.getJSONObject(i).getJSONObject("node");
+                JSONObject content = node.getJSONObject("content");
+                JSONArray backdrops = content.optJSONArray("backdrops");
+                if (backdrops == null || backdrops.length() == 0) continue;
+                Item item = new Item();
+                item.id = Math.abs(node.optString("id").hashCode());
+                item.type = kind;
+                item.providerId = p.id;
+                item.pkg = p.pkg;
+                item.key = "justwatch:" + p.id + ":" + node.optString("id");
+                item.title = content.optString("title");
+                item.overview = content.optString("shortDescription");
+                item.backdrop = "https://images.justwatch.com" + backdrops.getJSONObject(0)
+                        .getString("backdropUrl").replace("{profile}", "s1440").replace("{format}", "jpg");
+                item.logo = "";
+                int year = content.optInt("originalReleaseYear", 0);
+                item.year = year > 0 ? String.valueOf(year) : "";
+                JSONObject scoring = content.optJSONObject("scoring");
+                item.rating = scoring == null ? 0d : scoring.optDouble("imdbScore", 0d);
+                item.genres = jwGenres(content.optJSONArray("genres"));
+                JSONArray offers = node.optJSONArray("offers");
+                for (int k = 0; offers != null && k < offers.length(); k++) {
+                    JSONObject offer = offers.getJSONObject(k);
+                    JSONObject pack = offer.optJSONObject("package");
+                    if (pack != null && p.jwTech.equals(pack.optString("technicalName"))) {
+                        item.link = offer.optString("standardWebURL", "");
+                        break;
+                    }
+                }
+                if (!item.title.isEmpty()) out.add(item);
+            }
+        }
+        return out;
     }
 
     /**
@@ -574,9 +631,14 @@ final class Suggestions {
         for (Provider p : PROVIDERS) {
             if (!provs.contains(String.valueOf(p.id))) continue;
             for (String kind : kinds) {
+                String region = StreamingCatalog.region(c);
+                String language = I18n.getLang(c);
+                if (language == null || !language.matches("[a-zA-Z]{2}")) language = "en";
                 StringBuilder q = new StringBuilder("/discover/").append(kind)
-                        .append("?watch_region=IN&with_watch_monetization_types=flatrate&sort_by=popularity.desc")
-                        .append("&language=en-IN&include_adult=false&with_watch_providers=").append(p.id);
+                        .append("?watch_region=").append(region)
+                        .append("&with_watch_monetization_types=flatrate&sort_by=popularity.desc")
+                        .append("&language=").append(language).append("-").append(region)
+                        .append("&include_adult=false&with_watch_providers=").append(p.id);
                 if (!langs.isEmpty()) q.append("&with_original_language=").append(URLEncoder.encode(android.text.TextUtils.join("|", langs), "UTF-8"));
                 JSONArray results = get(c, q.toString()).optJSONArray("results");
                 List<Item> list = new ArrayList<>();

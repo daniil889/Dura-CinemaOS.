@@ -6,8 +6,7 @@ if (-not $env:JAVA_HOME) {
         "C:\Program Files\Java\jdk-17",
         "C:\Program Files\Java\jdk-21",
         "C:\Program Files\Eclipse Adoptium\jdk-17*",
-        "C:\Program Files\Microsoft\jdk-17*",
-        "C:\Users\asen4\AppData\Local\Programs\Microsoft\jdk-17.0.10.7-hotspot"
+        "C:\Program Files\Microsoft\jdk-17*"
     )
     foreach ($cand in $jdkCandidates) {
         $found = Get-Item $cand -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -29,15 +28,26 @@ $D8JAR = "$SDK\build-tools\36.0.0\lib\d8.jar"
 if (-not (Test-Path $D8JAR)) { $D8JAR = "$SDK\build-tools\35.0.0\lib\d8.jar" }
 if (-not (Test-Path $D8JAR)) { $D8JAR = "$BT\lib\d8.jar" }
 
+$requiredTools = @("$BT\aapt2.exe", "$BT\zipalign.exe", "$BT\apksigner.bat", "$JAR", "$D8JAR")
+foreach ($tool in $requiredTools) {
+    if (-not (Test-Path $tool)) { throw "Missing required Android SDK tool: $tool. Install build-tools 34.0.0 and 35.0.0/36.0.0, plus platform android-34, or set ANDROID_HOME." }
+}
+foreach ($tool in @("javac", "jar", "keytool", "java")) {
+    if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "$tool not found. Install JDK 17+ and set JAVA_HOME." }
+}
+
+$versionCode = if ($env:VERSION_CODE) { $env:VERSION_CODE } else { "17" }
+$versionName = if ($env:VERSION_NAME) { $env:VERSION_NAME } else { "2.2.5" }
+
 if (Test-Path "build") { Get-ChildItem -Path "build" | Remove-Item -Recurse -Force }
 New-Item -ItemType Directory -Force -Path "build\gen", "build\classes", "build\dex" | Out-Null
 
 & "$BT\aapt2.exe" compile --dir res -o build\res.zip
 if ($LASTEXITCODE -ne 0) { throw "aapt2 compile failed" }
 
-& "$BT\aapt2.exe" link -o build\unsigned.apk -I "$JAR" --manifest AndroidManifest.xml `
+& "$BT\aapt2.exe" link -o build\unsigned.apk -I "$JAR" --manifest AndroidManifest.xml --custom-package com.techgenius.tvoslauncher `
     --java build\gen --min-sdk-version 23 --target-sdk-version 34 `
-    --version-code 17 --version-name "2.2.5" build\res.zip
+    --version-code $versionCode --version-name $versionName build\res.zip
 if ($LASTEXITCODE -ne 0) { throw "aapt2 link failed" }
 
 $javaFiles = Get-ChildItem -Recurse -Path src, build\gen -Filter "*.java" | Select-Object -ExpandProperty FullName
@@ -81,13 +91,28 @@ try {
 if ($LASTEXITCODE -ne 0) { throw "zipalign failed" }
 
 $KS = "debug.keystore"
-if (-not (Test-Path $KS)) {
+if (-not $env:RELEASE_KEYSTORE -and -not (Test-Path $KS)) {
     & keytool -genkeypair -keystore $KS -storepass android -keypass android -alias debug `
-        -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=tvOS Launcher debug" | Out-Null
+        -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=tvOS Launcher debug" -noprompt | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Debug keystore generation failed" }
 }
 
-& "$BT\apksigner.bat" sign --ks $KS --ks-pass pass:android --key-pass pass:android `
-    --out build\tvos-home.apk build\aligned.apk
-if ($LASTEXITCODE -ne 0) { throw "apksigner failed" }
+if ($env:RELEASE_KEYSTORE) {
+    if (-not $env:RELEASE_KEYSTORE_PASS) { throw "Set RELEASE_KEYSTORE_PASS when RELEASE_KEYSTORE is configured." }
+    $alias = if ($env:RELEASE_KEY_ALIAS) { $env:RELEASE_KEY_ALIAS } else { "tvos-release" }
+    & "$BT\apksigner.bat" sign --ks $env:RELEASE_KEYSTORE --ks-pass "env:RELEASE_KEYSTORE_PASS" --ks-key-alias $alias --out build\tvos-home.apk build\aligned.apk
+    if ($LASTEXITCODE -ne 0) { throw "Release APK signing failed" }
+    Write-Host "Signed with the release key"
+} else {
+    & "$BT\apksigner.bat" sign --ks $KS --ks-pass pass:android --key-pass pass:android --out build\tvos-home.apk build\aligned.apk
+    if ($LASTEXITCODE -ne 0) { throw "Debug APK signing failed" }
+    Write-Host "Signed with the local debug key"
+}
+
+& "$BT\apksigner.bat" verify --verbose build\tvos-home.apk
+if ($LASTEXITCODE -ne 0) { throw "APK signature verification failed" }
+
+& "$BT\zipalign.exe" -c -v 4 build\tvos-home.apk
+if ($LASTEXITCODE -ne 0) { throw "APK alignment verification failed" }
 
 Write-Host "Built build\tvos-home.apk"

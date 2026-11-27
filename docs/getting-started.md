@@ -12,7 +12,7 @@
 | Android SDK build-tools | **34.0.0** | `aapt2`, `d8`, `zipalign`, `apksigner` |
 | Android SDK platform | **android-34** | `android.jar` для компиляции |
 | Android SDK platform-tools | последняя | `adb` для установки и отладки |
-| Устройство | Android TV 7.0+ (API 24+) | ТВ-приставка/телевизор или эмулятор Android TV |
+| Устройство | Android 6.0+ (API 23+) | ТВ-приставка/телевизор или эмулятор Android TV |
 
 Проверенные устройства: Xiaomi Mi Box 4 (Android 12, 32-битный ARM, GPU Mali-450) и телевизор
 SPPL на Android 9 (1 ГБ ОЗУ). Цель — слабое железо, поэтому по возможности тестируйте именно на
@@ -27,7 +27,7 @@ brew install --cask temurin@17                      # JDK 17 (или любой 
 brew install --cask android-commandlinetools        # sdkmanager
 export ANDROID_HOME="$HOME/Library/Android/sdk"
 yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses
-sdkmanager --sdk_root="$ANDROID_HOME" "platform-tools" "build-tools;34.0.0" "platforms;android-34"
+sdkmanager --sdk_root="$ANDROID_HOME" "platform-tools" "build-tools;34.0.0" "build-tools;35.0.0" "platforms;android-34"
 ```
 
 ### Linux (Debian/Ubuntu)

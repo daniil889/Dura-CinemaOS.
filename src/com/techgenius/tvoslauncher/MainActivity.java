@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
 
     static final PathInterpolator EASE = new PathInterpolator(0.2f, 0f, 0f, 1f);
     /** tvOS focused icon is ~1.2x its resting size (303x183 vs 248x148 px in Apple's reference). */
-    static final float FOCUS_SCALE = 1.2f;
+    static final float FOCUS_SCALE = 1.10f;
     /** Focus lift with a slight spring, like tvOS. */
     static final android.view.animation.OvershootInterpolator LIFT =
             new android.view.animation.OvershootInterpolator(1.3f);
@@ -216,6 +216,8 @@ public class MainActivity extends Activity {
     int focusedIndex = 0;
     int moveIndex = -1;
     boolean folderMode;
+    FrameLayout appFolderOverlay;
+    View folderReturnFocus;
     public boolean resumed;
     /** Package of the last app the launcher opened; read and cleared on the next resume. */
     String lastLaunchedPkg;
@@ -434,6 +436,7 @@ public class MainActivity extends Activity {
         // Home pressed while already on the home screen: jump back to the top of the home grid.
         if (moveIndex >= 0) endMove();
         if (folderMode) {
+            if (appFolderOverlay != null) closeAppFolderOverlay(false);
             folderMode = false;
             switcher.setAlpha(1f);
             weatherCard.setAlpha(weatherAlpha());
@@ -693,7 +696,7 @@ public class MainActivity extends Activity {
         root.setBackground(null);
 
         // One ambient wallpaper for every app. It is drawn tiny and upscaled, so it is already
-        // soft; a slow drift keeps it alive without a per-frame blur on this weak GPU.
+        // soft. Keep it static while idle to avoid wasting frames on this weak GPU.
         wallView = new ImageView(this);
         wallView.setScaleType(ImageView.ScaleType.CENTER_CROP);
         wallStyle = Profiles.homePrefs(this).getString("wallpaper", "photo:tessellated-pavement.jpg");
@@ -836,6 +839,30 @@ public class MainActivity extends Activity {
         timeChip.addView(time);
         clockBox.addView(timeChip, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, btn));
 
+        // VPN shortcut: opens Android VPN settings and reflects the active default VPN transport.
+        vpnButton = new ImageView(this);
+        vpnButton.setScaleType(ImageView.ScaleType.CENTER);
+        vpnButton.setImageBitmap(Glyphs.get("shield", dp(20), Color.WHITE));
+        LiquidGlass vpnGlass = new LiquidGlass(btn / 2f, 0x1F000000, glassSource, screenW, screenH, unit).adaptive();
+        vpnGlass.lens = dp(4);
+        vpnButton.setBackground(vpnGlass);
+        vpnButton.setFocusable(true);
+        vpnButton.setClickable(true);
+        LinearLayout.LayoutParams vpnLp = new LinearLayout.LayoutParams(btn, btn);
+        vpnLp.leftMargin = dp(12);
+        clockBox.addView(vpnButton, vpnLp);
+        GradientDrawable vpnLit = new GradientDrawable();
+        vpnLit.setShape(GradientDrawable.OVAL);
+        vpnLit.setColor(Color.WHITE);
+        vpnButton.setOnFocusChangeListener((v, has) -> {
+            vpnButton.setBackground(has ? vpnLit : vpnGlass);
+            vpnButton.setImageBitmap(Glyphs.get("shield", dp(20), has ? 0xFF111114 : (vpnConnected ? 0xFF30D158 : Color.WHITE)));
+            v.animate().scaleX(has ? 1.12f : 1f).scaleY(has ? 1.12f : 1f).setDuration(200).setInterpolator(LIFT).start();
+            if (has) onClassicNonAppFocused();
+        });
+        vpnButton.setOnClickListener(v -> openVpnSettings());
+        vpnButton.setContentDescription(I18n.s(this, "VPN settings", "VPN ayarları"));
+
         // Classic Big Clock Weather Shortcut button in top-right status row (when Big Clock is enabled on Classic look)
         classicWeatherButton = new ImageView(this);
         classicWeatherButton.setScaleType(ImageView.ScaleType.CENTER);
@@ -859,28 +886,7 @@ public class MainActivity extends Activity {
         });
         classicWeatherButton.setOnClickListener(v -> showWeather());
 
-        // Refresh: reloads every part of the carousel (recommendations, news, Continue Watching) and weather.
-        refreshButton = new ImageView(this);
-        refreshButton.setScaleType(ImageView.ScaleType.CENTER);
-        refreshButton.setImageBitmap(Glyphs.get("refresh", dp(20), Color.WHITE));
-        LiquidGlass rfGlass = new LiquidGlass(btn / 2f, 0x1F000000, glassSource, screenW, screenH, unit).adaptive();
-        rfGlass.lens = dp(4);
-        refreshButton.setBackground(rfGlass);
-        refreshButton.setFocusable(true);
-        refreshButton.setClickable(true);
-        LinearLayout.LayoutParams rblp = new LinearLayout.LayoutParams(btn, btn);
-        rblp.leftMargin = dp(12);
-        clockBox.addView(refreshButton, rblp);
-        GradientDrawable rfLit = new GradientDrawable();
-        rfLit.setShape(GradientDrawable.OVAL);
-        rfLit.setColor(Color.WHITE);
-        refreshButton.setOnFocusChangeListener((v, has) -> {
-            refreshButton.setBackground(has ? rfLit : rfGlass);
-            refreshButton.setImageBitmap(Glyphs.get("refresh", dp(20), has ? 0xFF111114 : Color.WHITE));
-            v.animate().scaleX(has ? 1.12f : 1f).scaleY(has ? 1.12f : 1f).setDuration(200).setInterpolator(LIFT).start();
-            if (has) onClassicNonAppFocused();
-        });
-        refreshButton.setOnClickListener(v -> refreshAll());
+        // Refresh is exposed as a quick action in Control Center to keep the status row minimal.
 
         // Search, beside Control Center: apps, settings, and movies and shows on every service.
         searchButton = new ImageView(this);
@@ -975,8 +981,8 @@ public class MainActivity extends Activity {
         weatherGlass = new LiquidGlass(dp(WeatherView.COMPACT_H) / 2f, 0x2E000000, glassSource, screenW, screenH, unit).adaptive();
         weatherGlass.lens = dp(6);
         weatherCard.setBackground(weatherGlass);
-        weatherCard.setFocusable(true);
-        weatherCard.setClickable(true);
+        weatherCard.setFocusable(false);
+        weatherCard.setClickable(false);
         weatherCard.setOnFocusChangeListener((v, has) -> {
             weatherGlass.setLit(has);
             if (has) {
@@ -988,7 +994,7 @@ public class MainActivity extends Activity {
         });
         weatherCard.setPivotX(0);
         weatherCard.setPivotY(0);
-        weatherCard.setOnClickListener(v -> showWeather());
+        weatherCard.setOnClickListener(null);
         // Top left, level with the status row and inside the same 48 px edge margin.
         FrameLayout.LayoutParams wlp = new FrameLayout.LayoutParams(dp(WeatherView.COMPACT_W), dp(WeatherView.COMPACT_H),
                 Gravity.TOP | Gravity.START);
@@ -1190,18 +1196,61 @@ public class MainActivity extends Activity {
         tile.setBackground(bg);
         tile.setOutlineProvider(roundedOutline(new float[]{cardRadius}));
         tile.setClipToOutline(true);
+        tile.setClipChildren(true);
+        tile.setClipToPadding(true);
+        tile.setElevation(dp(2));
+        tile.setCameraDistance(10500 * unit);
 
         ImageView iv = new ImageView(this);
+        FrameLayout adaptiveIconLayers = null;
+        ImageView adaptiveBackLayer = null;
+        ImageView adaptiveFrontLayer = null;
         if (a.banner != null) {
             iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
             iv.setImageDrawable(a.banner);
             tile.addView(iv, match());
+        } else if (Build.VERSION.SDK_INT >= 26
+                && a.icon instanceof android.graphics.drawable.AdaptiveIconDrawable) {
+            // Keep Android's adaptive icon layers separate so focus can create real depth,
+            // rather than merely scaling a flattened 2D bitmap.
+            android.graphics.drawable.AdaptiveIconDrawable adaptive =
+                    (android.graphics.drawable.AdaptiveIconDrawable) a.icon;
+            adaptiveIconLayers = new FrameLayout(this);
+            adaptiveIconLayers.setClipChildren(true);
+            adaptiveIconLayers.setClipToPadding(true);
+            adaptiveIconLayers.setOutlineProvider(roundedOutline(new float[]{dp(18)}));
+            adaptiveIconLayers.setClipToOutline(true);
+
+            adaptiveBackLayer = new ImageView(this);
+            adaptiveBackLayer.setScaleType(ImageView.ScaleType.FIT_XY);
+            Drawable adaptiveBackground = adaptive.getBackground();
+            if (adaptiveBackground != null) {
+                Drawable.ConstantState state = adaptiveBackground.getConstantState();
+                adaptiveBackLayer.setImageDrawable(state != null
+                        ? state.newDrawable(getResources()).mutate() : adaptiveBackground.mutate());
+                adaptiveIconLayers.addView(adaptiveBackLayer, match());
+            }
+
+            adaptiveFrontLayer = new ImageView(this);
+            adaptiveFrontLayer.setScaleType(ImageView.ScaleType.FIT_XY);
+            Drawable adaptiveForeground = adaptive.getForeground();
+            if (adaptiveForeground != null) {
+                Drawable.ConstantState state = adaptiveForeground.getConstantState();
+                adaptiveFrontLayer.setImageDrawable(state != null
+                        ? state.newDrawable(getResources()).mutate() : adaptiveForeground.mutate());
+                adaptiveIconLayers.addView(adaptiveFrontLayer, match());
+            }
+            int s = cardH * 55 / 100;
+            tile.addView(adaptiveIconLayers, new FrameLayout.LayoutParams(s, s, Gravity.CENTER));
         } else {
             iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
             iv.setImageDrawable(a.icon);
             int s = cardH * 55 / 100;
             tile.addView(iv, new FrameLayout.LayoutParams(s, s, Gravity.CENTER));
         }
+        final View iconArtwork = adaptiveIconLayers != null ? adaptiveIconLayers : iv;
+        final ImageView backParallax = adaptiveBackLayer;
+        final ImageView frontParallax = adaptiveFrontLayer;
 
         // tvOS focus has no outline ring: a soft top sheen on the hardware-cached tile.
         View topSheen = new View(this);
@@ -1209,6 +1258,28 @@ public class MainActivity extends Activity {
                 new int[]{0x1AFFFFFF, 0x00FFFFFF}));
         topSheen.setAlpha(0f);
         tile.addView(topSheen, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, cardH / 2, Gravity.TOP));
+
+        // The focused card gets a real backdrop-sampled glass layer, not a static translucent fill.
+        // It is only attached to the draw pass while focused to keep idle GPU cost near zero.
+        LiquidGlass cardGlass = new LiquidGlass(cardRadius, 0x16FFFFFF, glassSource,
+                screenW, screenH, unit).adaptive();
+        cardGlass.lens = dp(5);
+        cardGlass.rimStrength = 1.12f;
+        View focusGlass = new View(this);
+        focusGlass.setBackground(cardGlass);
+        focusGlass.setAlpha(0f);
+        focusGlass.setVisibility(View.GONE);
+        tile.addView(focusGlass, match());
+
+        // A restrained glass rim completes the focused-card treatment without a heavy outline.
+        View focusRim = new View(this);
+        GradientDrawable rim = new GradientDrawable();
+        rim.setColor(Color.TRANSPARENT);
+        rim.setCornerRadius(cardRadius);
+        rim.setStroke(Math.max(1, dp(0.8f)), 0x66FFFFFF);
+        focusRim.setBackground(rim);
+        focusRim.setAlpha(0f);
+        tile.addView(focusRim, match());
 
         TextView label = text(15, Ui.font(this, "medium"), 0f);
         label.setText(a.label);
@@ -1221,26 +1292,81 @@ public class MainActivity extends Activity {
 
         tile.setOnFocusChangeListener((v, has) -> {
             if (has) {
-                cell.setTranslationZ(dp(10));
+                cell.setTranslationZ(dp(16));
+                tile.setElevation(dp(14));
                 if (moveIndex >= 0) {
                     // Rebuilt while moving: appear already lifted, or every step would "pop".
                     v.setScaleX(FOCUS_SCALE);
                     v.setScaleY(FOCUS_SCALE);
+                    v.setRotationX(0f);
+                    v.setRotationY(0f);
                     label.setAlpha(1f);
                     label.setTranslationY(cardH * (FOCUS_SCALE - 1f) / 2f);
                 } else {
-                    v.animate().scaleX(FOCUS_SCALE).scaleY(FOCUS_SCALE).setDuration(180)
-                            .setInterpolator(LIFT).start();
-                    label.animate().alpha(1f).translationY(cardH * (FOCUS_SCALE - 1f) / 2f).setDuration(160).start();
+                    // A tiny perspective lean points each focused card back toward the viewer.
+                    // It is position-based (not an endless animation), so DPAD navigation stays calm.
+                    int[] screenPos = new int[2];
+                    v.getLocationOnScreen(screenPos);
+                    float nx = ((screenPos[0] + v.getWidth() * 0.5f) - screenW * 0.5f)
+                            / Math.max(1f, screenW * 0.5f);
+                    float ny = ((screenPos[1] + v.getHeight() * 0.5f) - screenH * 0.5f)
+                            / Math.max(1f, screenH * 0.5f);
+                    float tiltY = -Math.max(-1f, Math.min(1f, nx)) * 1.55f;
+                    float tiltX = Math.max(-1f, Math.min(1f, ny)) * 0.85f;
+                    float parallaxX = Math.max(-1f, Math.min(1f, nx)) * dp(3.2f);
+                    float parallaxY = Math.max(-1f, Math.min(1f, ny)) * dp(2.4f);
+                    v.animate().withLayer().scaleX(FOCUS_SCALE).scaleY(FOCUS_SCALE)
+                            .rotationX(0f).rotationY(0f).translationZ(dp(12))
+                            .setDuration(215).setInterpolator(LIFT).start();
+                    // Artwork moves against the card's tilt. Adaptive icons get independent
+                    // background/foreground offsets, matching the layered tvOS parallax language.
+                    iconArtwork.animate().withLayer().scaleX(1.035f).scaleY(1.035f)
+                            .translationX(-parallaxX * 0.32f).translationY(-parallaxY * 0.32f)
+                            .setDuration(215).setInterpolator(LIFT).start();
+                    if (backParallax != null) {
+                        backParallax.animate().withLayer().translationX(-parallaxX * 0.45f)
+                                .translationY(-parallaxY * 0.45f).setDuration(215)
+                                .setInterpolator(LIFT).start();
+                    }
+                    if (frontParallax != null) {
+                        frontParallax.animate().withLayer().translationX(parallaxX)
+                                .translationY(parallaxY).setDuration(215)
+                                .setInterpolator(LIFT).start();
+                    }
+                    label.animate().alpha(1f).translationY(cardH * (FOCUS_SCALE - 1f) / 2f)
+                            .setDuration(145).setInterpolator(LIFT).start();
                 }
-                topSheen.setAlpha(1f);
+                cardGlass.setLit(true);
+                focusGlass.setVisibility(View.VISIBLE);
+                focusGlass.setAlpha(0f);
+                focusGlass.animate().alpha(0.24f).setDuration(215).setInterpolator(EASE).start();
+                topSheen.animate().alpha(1f).setDuration(170).start();
+                focusRim.animate().alpha(0.82f).setDuration(170).start();
                 onTileFocused(index);
             } else {
                 cell.setTranslationZ(0);
+                tile.setElevation(dp(2));
                 stopSway(v);
-                v.animate().scaleX(1f).scaleY(1f).setDuration(140).setInterpolator(EASE).start();
-                label.animate().alpha(0f).translationY(0).setDuration(120).start();
-                topSheen.setAlpha(0f);
+                cardGlass.setLit(false);
+                focusGlass.animate().alpha(0f).setDuration(130).setInterpolator(EASE)
+                        .withEndAction(() -> {
+                            if (!tile.hasFocus()) focusGlass.setVisibility(View.GONE);
+                        }).start();
+                v.animate().scaleX(1f).scaleY(1f).rotationX(0f).rotationY(0f)
+                        .translationZ(0f).setDuration(170).setInterpolator(EASE).start();
+                iconArtwork.animate().scaleX(1f).scaleY(1f).translationX(0f).translationY(0f)
+                        .setDuration(180).setInterpolator(EASE).start();
+                if (backParallax != null) {
+                    backParallax.animate().translationX(0f).translationY(0f)
+                            .setDuration(180).setInterpolator(EASE).start();
+                }
+                if (frontParallax != null) {
+                    frontParallax.animate().translationX(0f).translationY(0f)
+                            .setDuration(180).setInterpolator(EASE).start();
+                }
+                label.animate().alpha(0f).translationY(0).setDuration(130).start();
+                topSheen.animate().alpha(0f).setDuration(130).start();
+                focusRim.animate().alpha(0f).setDuration(130).start();
             }
         });
         tile.setCameraDistance(9000 * unit);
@@ -1298,7 +1424,6 @@ public class MainActivity extends Activity {
         if (clockBox != null) clockBox.invalidate();
         if (timeChipView != null) timeChipView.invalidate();
         if (classicWeatherButton != null) classicWeatherButton.invalidate();
-        if (refreshButton != null) refreshButton.invalidate();
         if (searchButton != null) searchButton.invalidate();
         if (ccButton != null) ccButton.invalidate();
         if (weatherCard != null) weatherCard.invalidate();
@@ -2279,10 +2404,11 @@ public class MainActivity extends Activity {
         switcher.setFocusable(true);
         tabSuggestBg = new GradientDrawable();
         tabContinueBg = new GradientDrawable();
-        tabSuggest = tab(I18n.t(this, "Suggestions"), tabSuggestBg);
-        tabContinue = tab(I18n.t(this, "Continue Watching"), tabContinueBg);
+        tabSuggest = tab(I18n.t(this, "Apps"), tabSuggestBg);
+        tabContinue = null;
         switcher.addView(tabSuggest, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, h - dp(6)));
-        switcher.addView(tabContinue, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, h - dp(6)));
+        switcher.setContentDescription(I18n.t(this, "All apps"));
+        switcher.setOnClickListener(v -> enterFolder());
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, h,
                 Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         lp.topMargin = dp(26);
@@ -2308,14 +2434,10 @@ public class MainActivity extends Activity {
 
     /** Selected tab: soft glass pill; white with dark text while the tab bar has focus (tvOS). */
     void styleTabs() {
+        if (switcher == null || tabSuggest == null) return;
         boolean focused = switcher.isFocused();
-        boolean sug = !"continue".equals(shelfMode);
-        TextView on = sug ? tabSuggest : tabContinue, off = sug ? tabContinue : tabSuggest;
-        GradientDrawable onBg = sug ? tabSuggestBg : tabContinueBg, offBg = sug ? tabContinueBg : tabSuggestBg;
-        onBg.setColor(focused ? 0xFFFFFFFF : 0x33FFFFFF);
-        on.setTextColor(focused ? 0xFF111114 : Color.WHITE);
-        offBg.setColor(Color.TRANSPARENT);
-        off.setTextColor(0xB3FFFFFF);
+        tabSuggestBg.setColor(focused ? 0xFFFFFFFF : 0x33FFFFFF);
+        tabSuggest.setTextColor(focused ? 0xFF111114 : Color.WHITE);
     }
 
     void setShelfMode(String mode) {
@@ -2339,15 +2461,14 @@ public class MainActivity extends Activity {
 
     /** The tab bar only appears when there are two things to switch between. */
     boolean tabsShown() {
-        return false;  // one carousel mixes everything; no Suggestions / Continue Watching tabs
+        return true; // Persistent Apps entry opens the full app library, like the tvOS home navigation.
     }
 
     /** Applies the profile's choices: hides the tab bar and picks the one remaining mode. */
     void applyTabs() {
         if (switcher == null) return;
-        if (!"suggest".equals(shelfMode)) setShelfMode("suggest");
         boolean show = tabsShown();
-        if (!show && switcher.isFocused()) ccButton.requestFocus();
+        if (!show && switcher.isFocused()) vpnButton.requestFocus();
         switcher.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
@@ -2373,6 +2494,8 @@ public class MainActivity extends Activity {
     void focusTop() {
         if (switcher != null && switcher.getVisibility() == View.VISIBLE) {
             switcher.requestFocus();
+        } else if (vpnButton != null) {
+            vpnButton.requestFocus();
         } else if (classicWeatherButton != null && classicWeatherButton.getVisibility() == View.VISIBLE) {
             classicWeatherButton.requestFocus();
         } else {
@@ -2394,6 +2517,7 @@ public class MainActivity extends Activity {
      * - When Settings / Other Apps / Inputs / top bar / no app is focused, shows the 4-widget Home Dashboard.
      */
     void loadHero() {
+        hideClassicAppPreview();
         if (shelfEmpty != null) shelfEmpty.setAlpha(0f);
         heroItems = new ArrayList<>();
         if (shelfView != null) shelfView.setFocusable(false);
@@ -2649,26 +2773,48 @@ public class MainActivity extends Activity {
         float target = heroShown ? 1f : 0f;
         if (dir == 0 || !heroShown) {
             next.setTranslationX(0);
+            next.setScaleX(1.035f);
+            next.setScaleY(1.035f);
             next.setAlpha(target);
             old.setAlpha(0f);
             return;
         }
+        // Top Shelf artwork has a restrained cinematic push-in as it enters, with the
+        // outgoing image drifting in the opposite direction. No perpetual animation at idle.
         next.setTranslationX(screenW * 0.12f * dir);
+        next.setScaleX(1.075f);
+        next.setScaleY(1.075f);
         next.setAlpha(0f);
-        next.animate().translationX(0).alpha(1f).setDuration(650).setInterpolator(EASE).start();
+        next.animate().translationX(0).scaleX(1.035f).scaleY(1.035f).alpha(1f)
+                .setDuration(680).setInterpolator(EASE).start();
         old.animate().cancel();
-        old.animate().translationX(-screenW * 0.06f * dir).alpha(0f).setDuration(650)
-                .setInterpolator(EASE).withEndAction(() -> old.setTranslationX(0)).start();
+        old.animate().translationX(-screenW * 0.06f * dir).scaleX(1.06f).scaleY(1.06f)
+                .alpha(0f).setDuration(680).setInterpolator(EASE)
+                .withEndAction(() -> {
+                    old.setTranslationX(0);
+                    old.setScaleX(1.035f);
+                    old.setScaleY(1.035f);
+                }).start();
     }
 
     /** Carousel focused: the dock slides away and the artwork takes the whole screen (tvOS Top Shelf). */
     boolean heroRequested;
 
-    ImageView avatarView, ccButton, refreshButton, searchButton, classicWeatherButton, netIcon;
+    ImageView avatarView, ccButton, searchButton, classicWeatherButton, netIcon, vpnButton;
     View timeChipView;
     TextClock statusClock;
 
+    static final class AppPublishedProgram {
+        String title = "", description = "", poster = "", intentUri = "", type = "";
+        Suggestions.Item sourceItem;
+    }
+
     LinearLayout classicCwBox, classicCwRow;
+    LinearLayout appTopShelfBox, appTopShelfRow;
+    android.widget.HorizontalScrollView appTopShelfScroll;
+    final List<View> appTopShelfCards = new ArrayList<>();
+    String appTopShelfPkg = "";
+    int appTopShelfGeneration = 0;
     TextView classicCwHeader;
     android.widget.HorizontalScrollView classicCwScroll;
     final List<View> classicCwCards = new ArrayList<>();
@@ -2725,6 +2871,44 @@ public class MainActivity extends Activity {
         wlp.bottomMargin = dp(14);
         shelf.addView(classicCwBox, wlp);
 
+        appTopShelfBox = new LinearLayout(this);
+        appTopShelfBox.setOrientation(LinearLayout.VERTICAL);
+        appTopShelfBox.setClipChildren(false);
+        appTopShelfBox.setClipToPadding(false);
+        appTopShelfBox.setVisibility(View.GONE);
+        appTopShelfBox.setAlpha(0f);
+        TextView appTopShelfHeader = text(12f, Ui.font(this, "semibold"), 0.90f);
+        appTopShelfHeader.setText("Из приложения");
+        appTopShelfHeader.setLetterSpacing(0.015f);
+        appTopShelfHeader.setShadowLayer(dp(8), 0, dp(2), 0xCC000000);
+        LinearLayout.LayoutParams appHeaderLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        appHeaderLp.leftMargin = dp(14);
+        appHeaderLp.bottomMargin = dp(5);
+        appTopShelfBox.addView(appTopShelfHeader, appHeaderLp);
+        appTopShelfScroll = new android.widget.HorizontalScrollView(this) {
+            @Override public boolean executeKeyEvent(KeyEvent event) { return false; }
+        };
+        appTopShelfScroll.setHorizontalScrollBarEnabled(false);
+        appTopShelfScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        appTopShelfScroll.setClipChildren(false);
+        appTopShelfScroll.setClipToPadding(false);
+        appTopShelfRow = new LinearLayout(this);
+        appTopShelfRow.setOrientation(LinearLayout.HORIZONTAL);
+        appTopShelfRow.setClipChildren(false);
+        appTopShelfRow.setClipToPadding(false);
+        appTopShelfRow.setPadding(dp(14), dp(10), side, dp(18));
+        appTopShelfScroll.addView(appTopShelfRow, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        appTopShelfBox.addView(appTopShelfScroll, new LinearLayout.LayoutParams(
+                screenW - (side - dp(14)), ViewGroup.LayoutParams.WRAP_CONTENT));
+        FrameLayout.LayoutParams appShelfLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM | Gravity.START);
+        appShelfLp.leftMargin = side - dp(14);
+        appShelfLp.bottomMargin = dp(14);
+        shelf.addView(appTopShelfBox, appShelfLp);
+
         if (!Scenes.isScenesLook(this)) {
             rebuildClassicDashboardBox(shelf);
         }
@@ -2753,10 +2937,13 @@ public class MainActivity extends Activity {
         }
     }
 
+    boolean classicAppPreviewShown = false;
+
     void onClassicNonAppFocused() {
         if (Scenes.isScenesLook(this) || folderMode) return;
         activeClassicCwPkg = null;
         hideClassicCw();
+        hideClassicAppPreview();
         showClassicDashboard();
     }
 
@@ -2764,22 +2951,12 @@ public class MainActivity extends Activity {
         if (Scenes.isScenesLook(this) || folderMode) {
             activeClassicCwPkg = null;
             hideClassicCw();
+            hideClassicAppPreview();
             hideClassicDashboard();
             return;
         }
         if (statusFocused() || (weatherCard != null && weatherCard.isFocused())) {
             onClassicNonAppFocused();
-            return;
-        }
-        // Do not show Continue Watching for apps below the dock row
-        if (index >= Math.max(1, currentDockCols)) {
-            activeClassicCwPkg = null;
-            hideClassicCw();
-            if (HomeDashboard.isShowWhenNoCw(this)) {
-                showClassicDashboard();
-            } else {
-                hideClassicDashboard();
-            }
             return;
         }
         AppEntry a = (index >= 0 && index < shown.size()) ? shown.get(index) : null;
@@ -2788,17 +2965,346 @@ public class MainActivity extends Activity {
             onClassicNonAppFocused();
             return;
         }
+        // App artwork belongs only to the first home row and only to known streaming services.
+        // Lower rows are the app grid: keep the wallpaper clean and never repeat the selected app
+        // banner/logo behind the grid.
+        if (index >= Math.max(1, currentDockCols) || !isStreamingPlatform(a)) {
+            activeClassicCwPkg = null;
+            hideClassicCw();
+            hideClassicAppPreview();
+            hideClassicDashboard();
+            return;
+        }
         if (!cwEnabled()) {
             activeClassicCwPkg = null;
             hideClassicCw();
-            if (HomeDashboard.isShowWhenNoCw(this)) {
-                showClassicDashboard();
-            } else {
-                hideClassicDashboard();
-            }
+            showClassicAppPreview(a);
             return;
         }
         showClassicCwForPackage(a.pkg);
+    }
+
+    /** Media eligibility is kept separate from the Activity; content itself is never fabricated. */
+    boolean isStreamingPlatform(AppEntry app) {
+        return app != null && StreamingPlatformRegistry.isSupported(app.pkg, app.label);
+    }
+
+    /** Shows a lightweight app-specific Top Shelf scene when the app has no Continue Watching row. */
+    void showClassicAppPreview(AppEntry app) {
+        if (app == null || app.pkg == null || app.pkg.isEmpty() || !isStreamingPlatform(app)
+                || heroInfo == null || heroFront == null) return;
+        classicAppPreviewShown = true;
+        activeClassicCwPkg = null;
+        hideClassicDashboard();
+        heroFront.animate().cancel();
+        heroInfo.animate().cancel();
+        // Never substitute the app icon/banner for programme artwork. Until the app publishes
+        // genuine poster data, the user's selected wallpaper remains the only background.
+        heroFront.setImageDrawable(null);
+        heroFront.setAlpha(0f);
+        heroFront.setVisibility(View.GONE);
+        if (wallView != null) {
+            wallView.animate().cancel();
+            wallView.setAlpha(1f);
+            wallView.setVisibility(View.VISIBLE);
+        }
+        if (heroBack != null) {
+            heroBack.animate().cancel();
+            heroBack.setAlpha(0f);
+            heroBack.setVisibility(View.GONE);
+        }
+        if (heroDots != null) heroDots.setVisibility(View.GONE);
+        if (heroStrip != null) heroStrip.setVisibility(View.GONE);
+        if (heroProvider != null) heroProvider.setVisibility(View.GONE);
+        if (heroLogo != null) heroLogo.setVisibility(View.GONE);
+        if (heroTitle != null) heroTitle.setVisibility(View.GONE);
+        if (heroMeta != null) heroMeta.setVisibility(View.GONE);
+        if (heroOverview != null) heroOverview.setVisibility(View.GONE);
+        if (heroButton != null) heroButton.setVisibility(View.GONE);
+        if (heroRemove != null) heroRemove.setVisibility(View.GONE);
+        heroInfo.setVisibility(View.GONE);
+        heroInfo.setAlpha(0f);
+        loadAppPublishedTopShelf(app);
+    }
+
+    /** Reads only recommendations the app itself has published to Android TV's Preview Programs API. */
+    List<AppPublishedProgram> queryAppPublishedPrograms(String pkg) {
+        List<AppPublishedProgram> out = new ArrayList<>();
+        android.database.Cursor cursor = null;
+        try {
+            android.net.Uri uri = android.media.tv.TvContract.PreviewPrograms.CONTENT_URI;
+            String[] projection = {
+                    android.media.tv.TvContract.PreviewPrograms.COLUMN_TITLE,
+                    android.media.tv.TvContract.PreviewPrograms.COLUMN_SHORT_DESCRIPTION,
+                    android.media.tv.TvContract.PreviewPrograms.COLUMN_LONG_DESCRIPTION,
+                    android.media.tv.TvContract.PreviewPrograms.COLUMN_POSTER_ART_URI,
+                    android.media.tv.TvContract.PreviewPrograms.COLUMN_THUMBNAIL_URI,
+                    android.media.tv.TvContract.PreviewPrograms.COLUMN_INTENT_URI,
+                    android.media.tv.TvContract.PreviewPrograms.COLUMN_TYPE
+            };
+            String selection = android.media.tv.TvContract.PreviewPrograms.COLUMN_PACKAGE_NAME + " = ?";
+            cursor = getContentResolver().query(uri, projection, selection, new String[]{pkg},
+                    android.media.tv.TvContract.PreviewPrograms.COLUMN_WEIGHT + " DESC");
+            if (cursor == null) return out;
+            int titleCol = cursor.getColumnIndex(android.media.tv.TvContract.PreviewPrograms.COLUMN_TITLE);
+            int shortCol = cursor.getColumnIndex(android.media.tv.TvContract.PreviewPrograms.COLUMN_SHORT_DESCRIPTION);
+            int longCol = cursor.getColumnIndex(android.media.tv.TvContract.PreviewPrograms.COLUMN_LONG_DESCRIPTION);
+            int posterCol = cursor.getColumnIndex(android.media.tv.TvContract.PreviewPrograms.COLUMN_POSTER_ART_URI);
+            int thumbCol = cursor.getColumnIndex(android.media.tv.TvContract.PreviewPrograms.COLUMN_THUMBNAIL_URI);
+            int intentCol = cursor.getColumnIndex(android.media.tv.TvContract.PreviewPrograms.COLUMN_INTENT_URI);
+            int typeCol = cursor.getColumnIndex(android.media.tv.TvContract.PreviewPrograms.COLUMN_TYPE);
+            while (cursor.moveToNext() && out.size() < 12) {
+                AppPublishedProgram item = new AppPublishedProgram();
+                if (titleCol >= 0) item.title = cursor.getString(titleCol);
+                if (shortCol >= 0) item.description = cursor.getString(shortCol);
+                if ((item.description == null || item.description.trim().isEmpty()) && longCol >= 0)
+                    item.description = cursor.getString(longCol);
+                if (posterCol >= 0) item.poster = cursor.getString(posterCol);
+                if ((item.poster == null || item.poster.isEmpty()) && thumbCol >= 0)
+                    item.poster = cursor.getString(thumbCol);
+                if (intentCol >= 0) item.intentUri = cursor.getString(intentCol);
+                if (typeCol >= 0) item.type = cursor.getString(typeCol);
+                if (item.title != null && !item.title.trim().isEmpty()
+                        && item.poster != null && !item.poster.trim().isEmpty()) out.add(item);
+            }
+        } catch (Exception e) {
+            android.util.Log.w("TvHome", "App Top Shelf unavailable for " + pkg, e);
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        return out;
+    }
+
+    void loadAppPublishedTopShelf(AppEntry app) {
+        if (app == null || app.pkg == null || app.pkg.isEmpty() || appTopShelfBox == null) return;
+        final String pkg = app.pkg;
+        appTopShelfPkg = pkg;
+        final int generation = ++appTopShelfGeneration;
+        appTopShelfBox.animate().cancel();
+        appTopShelfBox.setVisibility(View.GONE);
+        appTopShelfBox.setAlpha(0f);
+        appTopShelfRow.removeAllViews();
+        appTopShelfCards.clear();
+        io.execute(() -> {
+            List<AppPublishedProgram> programs = queryAppPublishedPrograms(pkg);
+            // Fallback order: app-published TV preview rows, genuine playback history, then
+            // provider-specific public catalogue adapters. Never invent programme metadata.
+            if (programs.isEmpty()) {
+                List<Suggestions.Item> playback = MediaWatchService.Store.listForPackage(this, pkg, 12);
+                for (Suggestions.Item item : playback) {
+                    if (item == null || item.title == null || item.title.trim().isEmpty()
+                            || item.backdrop == null || item.backdrop.trim().isEmpty()) continue;
+                    AppPublishedProgram row = new AppPublishedProgram();
+                    row.title = item.title;
+                    row.description = item.overview == null ? "" : item.overview;
+                    row.poster = item.backdrop;
+                    row.intentUri = item.link == null ? "" : item.link;
+                    row.type = item.type == null ? "" : item.type;
+                    row.sourceItem = item;
+                    programs.add(row);
+                }
+            }
+            if (programs.isEmpty()) {
+                List<Suggestions.Item> catalogue = StreamingCatalog.fetchForPackage(this, pkg, 12);
+                for (Suggestions.Item item : catalogue) {
+                    if (item == null || item.title == null || item.title.trim().isEmpty()
+                            || item.backdrop == null || item.backdrop.trim().isEmpty()) continue;
+                    AppPublishedProgram row = new AppPublishedProgram();
+                    row.title = item.title;
+                    row.description = item.overview == null ? "" : item.overview;
+                    row.poster = item.backdrop;
+                    row.intentUri = item.link == null ? "" : item.link;
+                    row.type = item.type == null ? "" : item.type;
+                    row.sourceItem = item;
+                    programs.add(row);
+                }
+            }
+            handler.post(() -> {
+                if (generation != appTopShelfGeneration || !pkg.equals(appTopShelfPkg)
+                        || !classicAppPreviewShown || folderMode || shown.isEmpty()
+                        || focusedIndex < 0 || focusedIndex >= shown.size()
+                        || !pkg.equals(shown.get(focusedIndex).pkg)) return;
+                if (programs.isEmpty()) return;
+                hideClassicDashboard();
+                heroProvider.setVisibility(View.GONE);
+                heroLogo.setVisibility(View.GONE);
+                heroButton.setVisibility(View.GONE);
+                heroRemove.setVisibility(View.GONE);
+                // Keep the wallpaper until the first real poster has decoded. If the
+                // provider's highest-weight entry has a broken image, the next valid poster wins.
+                final boolean[] initialHeroSelected = {false};
+                int cardW = dp(132), cardH = dp(198), gap = dp(15);
+                for (int i = 0; i < programs.size(); i++) {
+                    final AppPublishedProgram program = programs.get(i);
+                    LinearLayout card = new LinearLayout(this);
+                    card.setOrientation(LinearLayout.VERTICAL);
+                    card.setFocusable(true);
+                    card.setFocusableInTouchMode(true);
+                    card.setClipChildren(true);
+                    card.setClipToPadding(true);
+                    card.setCameraDistance(9000f * unit);
+                    android.graphics.drawable.GradientDrawable cardBg = new android.graphics.drawable.GradientDrawable();
+                    cardBg.setColor(0x26FFFFFF);
+                    cardBg.setCornerRadius(dp(11));
+                    card.setBackground(cardBg);
+                    card.setClipToOutline(true);
+                    card.setElevation(dp(2));
+                    card.setPadding(dp(3), dp(3), dp(3), dp(4));
+                    ImageView poster = new ImageView(this);
+                    poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                    poster.setBackgroundColor(0x33FFFFFF);
+                    android.graphics.drawable.GradientDrawable posterOutline = new android.graphics.drawable.GradientDrawable();
+                    posterOutline.setColor(Color.TRANSPARENT);
+                    posterOutline.setCornerRadius(dp(7));
+                    poster.setBackground(posterOutline);
+                    poster.setClipToOutline(true);
+                    card.addView(poster, new LinearLayout.LayoutParams(cardW - dp(6), cardH - dp(42)));
+                    TextView name = text(10f, Ui.font(this, "semibold"), 0.96f);
+                    name.setText(program.title);
+                    name.setMaxLines(2);
+                    name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    name.setGravity(Gravity.CENTER_VERTICAL);
+                    name.setPadding(dp(5), dp(3), dp(5), 0);
+                    card.addView(name, new LinearLayout.LayoutParams(cardW - dp(6), dp(36)));
+                    LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(cardW, cardH);
+                    if (i > 0) cardLp.leftMargin = gap;
+                    appTopShelfRow.addView(card, cardLp);
+                    appTopShelfCards.add(card);
+                    card.setOnFocusChangeListener((v, focused) -> {
+                        v.animate().withLayer()
+                                .scaleX(focused ? 1.055f : 1f)
+                                .scaleY(focused ? 1.055f : 1f)
+                                .translationZ(focused ? dp(10) : 0f)
+                                .setDuration(focused ? 190 : 150)
+                                .setInterpolator(focused ? LIFT : EASE).start();
+                        v.setElevation(focused ? dp(12) : dp(2));
+                        name.setTextColor(focused ? Color.WHITE : 0xD9FFFFFF);
+                        if (focused && pkg.equals(appTopShelfPkg) && classicAppPreviewShown) {
+                            updateAppTopShelfHero(program, app);
+                            appTopShelfScroll.smoothScrollTo(Math.max(0, v.getLeft() - dp(30)), 0);
+                        }
+                    });
+                    card.setOnClickListener(v -> openAppPublishedProgram(program, pkg));
+                    io.execute(() -> {
+                        Bitmap bitmap = Suggestions.image(this, program.poster, "w342", 360);
+                        if (bitmap != null) handler.post(() -> {
+                            if (generation == appTopShelfGeneration && poster.getParent() != null) {
+                                poster.setImageBitmap(bitmap);
+                                if (!initialHeroSelected[0] && classicAppPreviewShown
+                                        && pkg.equals(appTopShelfPkg)) {
+                                    initialHeroSelected[0] = true;
+                                    updateAppTopShelfHero(program, app);
+                                }
+                            } else bitmap.recycle();
+                        });
+                        else handler.post(() -> {
+                            if (generation == appTopShelfGeneration && card.getParent() == appTopShelfRow) {
+                                appTopShelfRow.removeView(card);
+                                appTopShelfCards.remove(card);
+                            }
+                        });
+                    });
+                }
+                appTopShelfScroll.scrollTo(0, 0);
+                appTopShelfBox.setVisibility(View.GONE);
+                appTopShelfBox.setAlpha(0f);
+            });
+        });
+    }
+
+    void updateAppTopShelfHero(AppPublishedProgram program, AppEntry app) {
+        if (program == null || program.poster == null || program.poster.trim().isEmpty()) return;
+        heroTitle.setText(program.title == null ? "" : program.title);
+        heroMeta.setText(app.label == null ? appLabel(app.pkg) : app.label);
+        heroOverview.setText(program.description == null ? "" : program.description);
+        heroOverview.setVisibility(program.description == null || program.description.trim().isEmpty()
+                ? View.GONE : View.VISIBLE);
+        heroOverview.setMaxLines(3);
+        heroTitle.setVisibility(View.VISIBLE);
+        heroMeta.setVisibility(View.VISIBLE);
+        final int generation = appTopShelfGeneration;
+        final String pkg = app.pkg;
+        io.execute(() -> {
+            Bitmap image = Suggestions.image(this, program.poster, "w780", Math.min(1600, screenW * 2));
+            if (image == null) return;
+            handler.post(() -> {
+                if (generation != appTopShelfGeneration || !classicAppPreviewShown
+                        || !pkg.equals(appTopShelfPkg) || heroFront == null) {
+                    image.recycle();
+                    return;
+                }
+                heroFront.setImageBitmap(bakeScrims(image));
+                heroFront.setVisibility(View.VISIBLE);
+                heroFront.setAlpha(1f);
+                heroInfo.setVisibility(View.VISIBLE);
+                heroInfo.setAlpha(1f);
+                if (wallView != null) {
+                    wallView.animate().cancel();
+                    wallView.animate().alpha(0f).setDuration(220).withEndAction(() -> {
+                        if (classicAppPreviewShown && pkg.equals(appTopShelfPkg)) wallView.setVisibility(View.GONE);
+                    }).start();
+                }
+                if (appTopShelfBox.getVisibility() != View.VISIBLE) {
+                    appTopShelfBox.setVisibility(View.VISIBLE);
+                    appTopShelfBox.setAlpha(0f);
+                    appTopShelfBox.setTranslationY(dp(10));
+                    appTopShelfBox.animate().alpha(1f).translationY(0f)
+                            .setDuration(260).setInterpolator(EASE).start();
+                }
+            });
+        });
+    }
+
+    void openAppPublishedProgram(AppPublishedProgram program, String pkg) {
+        if (program != null && program.sourceItem != null) {
+            openHeroItem(program.sourceItem);
+            return;
+        }
+        try {
+            if (program.intentUri != null && !program.intentUri.trim().isEmpty()) {
+                android.content.Intent intent = android.content.Intent.parseUri(program.intentUri, 0);
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                if (intent.resolveActivity(getPackageManager()) != null) {
+                    startActivity(intent);
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.w("TvHome", "Could not open published Top Shelf item", e);
+        }
+        android.content.Intent launch = getPackageManager().getLeanbackLaunchIntentForPackage(pkg);
+        if (launch == null) launch = getPackageManager().getLaunchIntentForPackage(pkg);
+        if (launch != null) startActivity(launch);
+    }
+
+    void hideClassicAppPreview() {
+        if (!classicAppPreviewShown) return;
+        classicAppPreviewShown = false;
+        appTopShelfGeneration++;
+        appTopShelfPkg = "";
+        if (appTopShelfBox != null) {
+            appTopShelfBox.animate().cancel();
+            appTopShelfBox.setAlpha(0f);
+            appTopShelfBox.setVisibility(View.GONE);
+        }
+        if (heroFront != null) {
+            heroFront.animate().cancel();
+            heroFront.animate().alpha(0f).setDuration(160).withEndAction(() -> {
+                if (!classicAppPreviewShown && !heroShown) heroFront.setVisibility(View.GONE);
+            }).start();
+        }
+        if (heroInfo != null) {
+            heroInfo.animate().cancel();
+            heroInfo.animate().alpha(0f).setDuration(150).withEndAction(() -> {
+                if (!classicAppPreviewShown && !heroShown) heroInfo.setVisibility(View.GONE);
+            }).start();
+        }
+        if (wallView != null) {
+            wallView.setVisibility(View.VISIBLE);
+            wallView.animate().cancel();
+            wallView.animate().alpha(1f).setDuration(180).start();
+        }
+        if (heroDots != null) heroDots.setVisibility(View.GONE);
     }
 
     void showClassicDashboard() {
@@ -2850,8 +3356,10 @@ public class MainActivity extends Activity {
         }
         if (pkg.equals(activeClassicCwPkg) && classicCwBox.getVisibility() == View.VISIBLE && !classicCwCards.isEmpty()) {
             hideClassicDashboard();
+            hideClassicAppPreview();
             return;
         }
+        hideClassicAppPreview();
         if (!HomeDashboard.isShowWhenNoCw(this)) {
             hideClassicDashboard();
         }
@@ -2873,11 +3381,13 @@ public class MainActivity extends Activity {
                     classicCwBox.animate().cancel();
                     classicCwBox.setAlpha(0f);
                     classicCwBox.setVisibility(View.GONE);
-                    if (HomeDashboard.isShowWhenNoCw(this)) {
-                        showClassicDashboard();
-                    } else {
-                        hideClassicDashboard();
+                    AppEntry preview = null;
+                    for (AppEntry candidate : shown) {
+                        if (pkg.equals(candidate.pkg)) { preview = candidate; break; }
                     }
+                    if (preview != null) showClassicAppPreview(preview);
+                    else if (HomeDashboard.isShowWhenNoCw(this)) showClassicDashboard();
+                    else hideClassicDashboard();
                     if (restoreSlot >= 0) {
                         focusIndex(focusedIndex);
                     }
@@ -3081,23 +3591,16 @@ public class MainActivity extends Activity {
         if (f == switcher) {
             switch (k) {
                 case KeyEvent.KEYCODE_DPAD_LEFT:
-                    if (down) {
-                        if (continueMode()) setShelfMode("suggest");
-                        else if (weatherShown()) weatherCard.requestFocus();
-                    }
+                    if (down && weatherShown() && weatherCard != null) weatherCard.requestFocus();
                     return true;
                 case KeyEvent.KEYCODE_DPAD_RIGHT:
-                    // Past the last tab, Right continues to the status row (Control Center).
-                    if (down) {
-                        if (continueMode()) ccButton.requestFocus();
-                        else setShelfMode("continue");
-                    }
+                    if (down && vpnButton != null) vpnButton.requestFocus();
                     return true;
                 case KeyEvent.KEYCODE_DPAD_CENTER:
                 case KeyEvent.KEYCODE_ENTER:
-                    if (!down) setShelfMode(continueMode() ? "suggest" : "continue");
+                    if (!down) enterFolder();
                     return true;
-                case KeyEvent.KEYCODE_DPAD_UP: if (down) ccButton.requestFocus(); return true;
+                case KeyEvent.KEYCODE_DPAD_UP: if (down) vpnButton.requestFocus(); return true;
                 case KeyEvent.KEYCODE_DPAD_DOWN:
                 case KeyEvent.KEYCODE_BACK:
                     if (down) {
@@ -3112,26 +3615,43 @@ public class MainActivity extends Activity {
                 default: return false;
             }
         }
-        if (f == classicWeatherButton || f == refreshButton || f == searchButton || f == ccButton || f == avatarView) {
-            // Status row, left to right: Weather (if Big Clock), Refresh, Search, Control Center, profile.
+        if (f == vpnButton || f == classicWeatherButton || f == searchButton || f == ccButton || f == avatarView) {
+            // Explicit tvOS-style focus order. Skip optional controls when their preference hides them.
+            boolean weatherShortcutVisible = classicWeatherButton != null
+                    && classicWeatherButton.getVisibility() == View.VISIBLE;
+            boolean searchShortcutVisible = searchButton != null
+                    && searchButton.getVisibility() == View.VISIBLE;
+            boolean profileShortcutVisible = avatarView != null
+                    && avatarView.getVisibility() == View.VISIBLE;
             if (k == KeyEvent.KEYCODE_DPAD_LEFT) {
                 if (down) {
                     if (f == avatarView) ccButton.requestFocus();
-                    else if (f == ccButton) searchButton.requestFocus();
-                    else if (f == searchButton) refreshButton.requestFocus();
-                    else if (f == refreshButton && classicWeatherButton != null && classicWeatherButton.getVisibility() == View.VISIBLE) {
-                        classicWeatherButton.requestFocus();
-                    } else if (switcher.getVisibility() == View.VISIBLE) switcher.requestFocus();
-                    else if (weatherShown()) weatherCard.requestFocus();
+                    else if (f == ccButton) {
+                        if (searchShortcutVisible) searchButton.requestFocus();
+                        else if (weatherShortcutVisible) classicWeatherButton.requestFocus();
+                        else vpnButton.requestFocus();
+                    } else if (f == searchButton) {
+                        if (weatherShortcutVisible) classicWeatherButton.requestFocus();
+                        else vpnButton.requestFocus();
+                    } else if (f == classicWeatherButton) vpnButton.requestFocus();
+                    else if (f == vpnButton) {
+                        if (switcher.getVisibility() == View.VISIBLE) switcher.requestFocus();
+                        else if (weatherShown()) weatherCard.requestFocus();
+                    }
                 }
                 return true;
             }
             if (k == KeyEvent.KEYCODE_DPAD_RIGHT) {
                 if (down) {
-                    if (f == classicWeatherButton) refreshButton.requestFocus();
-                    else if (f == refreshButton) searchButton.requestFocus();
-                    else if (f == searchButton) ccButton.requestFocus();
-                    else if (f == ccButton && avatarView != null && avatarView.getVisibility() == View.VISIBLE) avatarView.requestFocus();
+                    if (f == vpnButton) {
+                        if (weatherShortcutVisible) classicWeatherButton.requestFocus();
+                        else if (searchShortcutVisible) searchButton.requestFocus();
+                        else ccButton.requestFocus();
+                    } else if (f == classicWeatherButton) {
+                        if (searchShortcutVisible) searchButton.requestFocus();
+                        else ccButton.requestFocus();
+                    } else if (f == searchButton) ccButton.requestFocus();
+                    else if (f == ccButton && profileShortcutVisible) avatarView.requestFocus();
                 }
                 return true;
             }
@@ -3686,7 +4206,7 @@ public class MainActivity extends Activity {
             return;
         }
         scrollAnim = ObjectAnimator.ofInt(scroll, "scrollY", cur, target);
-        scrollAnim.setDuration(380);
+        scrollAnim.setDuration(260);
         scrollAnim.setInterpolator(EASE);
         scrollAnim.start();
     }
@@ -3782,40 +4302,219 @@ public class MainActivity extends Activity {
         return b;
     }
 
+    /** Opens the overflow collection as a centered tvOS-style folder sheet. */
     void enterFolder() {
-        if (effectiveOtherApps.isEmpty()) return;
-        animateGridSwap(() -> {
-            folderMode = true;
-            setHeroShown(false);
-            hideClassicCw();
-            hideClassicDashboard();
-            if (!Scenes.isScenesLook(this) && Scenes.isClassicBigClockEnabled(this) && sceneHome != null) {
-                sceneHome.sceneView.setAlpha(0f);
+        if (appFolderOverlay != null) return;
+        final List<AppEntry> libraryApps = new ArrayList<>();
+        libraryApps.addAll(apps);
+        for (AppEntry extra : effectiveOtherApps) {
+            boolean exists = false;
+            for (AppEntry current : libraryApps) {
+                if (current.key != null && current.key.equals(extra.key)) { exists = true; break; }
             }
-            switcher.setAlpha(0f);
-            weatherCard.setAlpha(0f);
-            shelfEmpty.setAlpha(0f);
-            buildGrid();
-            shelfEntry = null;
-            scroll.scrollTo(0, 0);
-            focusIndex(0);
-        });
+            if (!exists) libraryApps.add(extra);
+        }
+        if (libraryApps.isEmpty()) return;
+        folderReturnFocus = getCurrentFocus();
+        folderMode = true;
+        setHeroShown(false);
+        hideClassicCw();
+        hideClassicDashboard();
+        if (!Scenes.isScenesLook(this) && Scenes.isClassicBigClockEnabled(this) && sceneHome != null) {
+            sceneHome.sceneView.setAlpha(0f);
+        }
+        if (switcher != null) switcher.setAlpha(0f);
+        if (weatherCard != null) weatherCard.setAlpha(0f);
+        if (shelfEmpty != null) shelfEmpty.setAlpha(0f);
+
+        FrameLayout overlay = new FrameLayout(this);
+        overlay.setFocusable(true);
+        overlay.setBackgroundColor(0xD9060910);
+        overlay.setAlpha(0f);
+        overlay.setOnClickListener(v -> exitFolder());
+
+        int panelW = Math.max(dp(320), screenW - dp(56));
+        int panelH = Math.max(dp(260), screenH - dp(48));
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(28), dp(22), dp(28), dp(22));
+        GradientDrawable librarySurface = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0xF2222731, 0xF0181C25});
+        librarySurface.setCornerRadius(dp(24));
+        librarySurface.setStroke(Math.max(1, dp(1)), 0x30FFFFFF);
+        panel.setBackground(librarySurface);
+        panel.setElevation(dp(28));
+        panel.setOnClickListener(v -> { /* consume clicks inside the folder surface */ });
+        FrameLayout.LayoutParams panelLp = new FrameLayout.LayoutParams(panelW, panelH, Gravity.CENTER);
+        overlay.addView(panel, panelLp);
+
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.VERTICAL);
+        header.setPadding(dp(4), dp(0), dp(4), dp(18));
+        TextView title = text(27, Ui.font(this, "display"), 1f);
+        title.setText(I18n.s(this, "Apps", "Uygulamalar"));
+        title.setSingleLine(true);
+        TextView subtitle = text(13, Ui.font(this, "regular"), 0.62f);
+        subtitle.setText(I18n.count(this, libraryApps.size(), "app", "apps",
+                "uygulama", "uygulama", "приложение", "приложения", "приложений")
+                + "  ·  " + I18n.s(this, "Press Back to close", "Kapatmak için Geri"));
+        subtitle.setSingleLine(true);
+        header.addView(title);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        subLp.topMargin = dp(4);
+        header.addView(subtitle, subLp);
+        panel.addView(header);
+
+        ScrollView gridScroll = new ScrollView(this);
+        gridScroll.setFillViewport(false);
+        gridScroll.setVerticalScrollBarEnabled(false);
+        gridScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        LinearLayout grid = new LinearLayout(this);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        grid.setClipChildren(false);
+        grid.setClipToPadding(false);
+        int columns = 5;
+        LinearLayout gridRow = null;
+        for (int i = 0; i < libraryApps.size(); i++) {
+            if (i % columns == 0) {
+                gridRow = new LinearLayout(this);
+                gridRow.setOrientation(LinearLayout.HORIZONTAL);
+                gridRow.setGravity(Gravity.TOP);
+                gridRow.setClipChildren(false);
+                gridRow.setClipToPadding(false);
+                if (i > 0) {
+                    LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    rowLp.topMargin = dp(12);
+                    grid.addView(gridRow, rowLp);
+                } else {
+                    grid.addView(gridRow);
+                }
+            }
+            final AppEntry app = libraryApps.get(i);
+            LinearLayout item = new LinearLayout(this);
+            item.setOrientation(LinearLayout.VERTICAL);
+            item.setGravity(Gravity.CENTER);
+            item.setFocusable(true);
+            item.setClickable(true);
+            item.setPadding(dp(7), dp(8), dp(7), dp(6));
+            GradientDrawable itemBg = new GradientDrawable();
+            itemBg.setColor(0x001FFFFFFF);
+            itemBg.setCornerRadius(dp(18));
+            itemBg.setStroke(Math.max(1, dp(1)), 0x00FFFFFF);
+            item.setBackground(itemBg);
+
+            FrameLayout iconSurface = new FrameLayout(this);
+            GradientDrawable iconBg = new GradientDrawable(
+                    GradientDrawable.Orientation.TOP_BOTTOM,
+                    new int[]{0xFF303541, 0xFF1C202A});
+            iconBg.setCornerRadius(dp(19));
+            iconSurface.setBackground(iconBg);
+            ImageView icon = new ImageView(this);
+            icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            Drawable appIcon = app.icon != null ? app.icon : app.banner;
+            if (appIcon != null) icon.setImageDrawable(appIcon);
+            int iconSize = dp(58);
+            FrameLayout.LayoutParams iconLp = new FrameLayout.LayoutParams(iconSize, iconSize, Gravity.CENTER);
+            iconSurface.addView(icon, iconLp);
+            View iconSheen = new View(this);
+            iconSheen.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                    new int[]{0x2AFFFFFF, 0x00FFFFFF}));
+            iconSheen.setAlpha(0f);
+            iconSurface.addView(iconSheen, match());
+            item.addView(iconSurface, new LinearLayout.LayoutParams(dp(88), dp(88)));
+            item.setCameraDistance(10000f * unit);
+            final float folderTiltY = (2f - (i % columns)) * 0.42f;
+            final float folderTiltX = ((i / columns) - 1f) * 0.28f;
+
+            TextView label = text(13, Ui.font(this, "medium"), 0.92f);
+            label.setText(app.label);
+            label.setGravity(Gravity.CENTER);
+            label.setMaxLines(2);
+            label.setEllipsize(TextUtils.TruncateAt.END);
+            LinearLayout.LayoutParams labelLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(38));
+            labelLp.topMargin = dp(7);
+            item.addView(label, labelLp);
+
+            item.setOnFocusChangeListener((v, focused) -> {
+                itemBg.setColor(focused ? 0x2EFFFFFF : 0x001FFFFFFF);
+                itemBg.setStroke(Math.max(1, dp(1)), focused ? 0x88FFFFFF : 0x00FFFFFF);
+                iconBg.setColor(focused ? 0xFF414958 : 0xFF252A35);
+                v.animate().scaleX(focused ? 1.08f : 1f).scaleY(focused ? 1.08f : 1f)
+                        .rotationX(focused ? folderTiltX : 0f)
+                        .rotationY(focused ? folderTiltY : 0f)
+                        .translationZ(focused ? dp(12) : 0)
+                        .setDuration(focused ? 220 : 170).setInterpolator(LIFT).start();
+                iconSheen.animate().alpha(focused ? 0.9f : 0f).setDuration(180).start();
+                label.setTextColor(focused ? Color.WHITE : 0xD9FFFFFF);
+            });
+            item.setOnClickListener(v -> {
+                View origin = folderReturnFocus;
+                closeAppFolderOverlay(false);
+                if (origin != null) launchAnimated(origin, app);
+                else if (app.launch != null) Suggestions.start(this, app.launch);
+            });
+            LinearLayout.LayoutParams itemLp = new LinearLayout.LayoutParams(0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            if (i % columns != 0) itemLp.leftMargin = dp(8);
+            gridRow.addView(item, itemLp);
+        }
+        gridScroll.addView(grid, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        panel.addView(gridScroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        appFolderOverlay = overlay;
+        root.addView(overlay, match());
+        overlay.animate().alpha(1f).setDuration(180).setInterpolator(EASE).start();
+        View first = grid.getChildCount() > 0 && ((LinearLayout) grid.getChildAt(0)).getChildCount() > 0
+                ? ((LinearLayout) grid.getChildAt(0)).getChildAt(0) : null;
+        if (first != null) first.requestFocus();
+    }
+
+    private GradientDrawable folderPanelBackground() {
+        GradientDrawable bg = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0xF2262B36, 0xF0181C25});
+        bg.setCornerRadius(dp(28));
+        bg.setStroke(Math.max(1, dp(1)), 0x44FFFFFF);
+        return bg;
+    }
+
+    void closeAppFolderOverlay(boolean restoreFocus) {
+        View restore = folderReturnFocus;
+        FrameLayout overlay = appFolderOverlay;
+        appFolderOverlay = null;
+        folderMode = false;
+        folderReturnFocus = null;
+        if (overlay != null) {
+            overlay.animate().alpha(0f).setDuration(130).setInterpolator(EASE)
+                    .withEndAction(() -> {
+                        if (overlay.getParent() == root) root.removeView(overlay);
+                    }).start();
+        }
+        if (!Scenes.isScenesLook(this) && Scenes.isClassicBigClockEnabled(this) && sceneHome != null) {
+            sceneHome.sceneView.animate().alpha(clockAlpha()).setDuration(180).start();
+        }
+        if (switcher != null) switcher.animate().alpha(1f).setDuration(180).start();
+        if (weatherCard != null) weatherCard.animate().alpha(weatherAlpha()).setDuration(180).start();
+        if (shelfEmpty != null) shelfEmpty.animate().alpha(1f).setDuration(180).start();
+        if (restoreFocus) {
+            handler.postDelayed(() -> {
+                if (restore != null && restore.getParent() != null) restore.requestFocus();
+                else {
+                    int idx = indexOfKey(FOLDER_KEY);
+                    focusIndex(idx >= 0 ? idx : 0);
+                }
+            }, 150);
+        }
     }
 
     void exitFolder() {
-        animateGridSwap(() -> {
-            folderMode = false;
-            if (!Scenes.isScenesLook(this) && Scenes.isClassicBigClockEnabled(this) && sceneHome != null) {
-                sceneHome.sceneView.animate().alpha(clockAlpha()).setDuration(250).start();
-            }
-            switcher.animate().alpha(1f).setDuration(250).start();
-            weatherCard.animate().alpha(weatherAlpha()).setDuration(250).start();
-            buildGrid();
-            shelfEntry = null;
-            int i = indexOfKey(FOLDER_KEY);
-            focusIndex(i >= 0 ? i : 0);
-            syncClassicTopShelfForIndex(focusedIndex);
-        });
+        closeAppFolderOverlay(true);
     }
 
     /** Quick zoom-through between home and folder, so it reads as "opening" the folder. */
@@ -3834,6 +4533,15 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent ev) {
+        // The global button mapper can consume OK before Android dispatches it to the focused
+        // status shortcut. Route OK directly for the home-screen VPN button.
+        if (ev != null && vpnButton != null && vpnButton.hasFocus()
+                && (ev.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER
+                    || ev.getKeyCode() == KeyEvent.KEYCODE_ENTER)
+                && ev.getAction() == KeyEvent.ACTION_UP) {
+            openVpnSettings();
+            return true;
+        }
         if (ambientShowcase) {
             if (ev == null) return true;
             int action = ev.getAction();
@@ -3909,6 +4617,15 @@ public class MainActivity extends Activity {
                 if (ev.getAction() == KeyEvent.ACTION_UP) closeMenu();
                 return true;
             }
+            return super.dispatchKeyEvent(ev);
+        }
+        if (appFolderOverlay != null) {
+            int fk = ev.getKeyCode();
+            if (fk == KeyEvent.KEYCODE_BACK || fk == KeyEvent.KEYCODE_ESCAPE) {
+                if (ev.getAction() == KeyEvent.ACTION_UP) exitFolder();
+                return true;
+            }
+            if (fk == KeyEvent.KEYCODE_MENU) return true;
             return super.dispatchKeyEvent(ev);
         }
         if (sceneHome != null && sceneHome.isSheetOpen()) {
@@ -4496,6 +5213,12 @@ public class MainActivity extends Activity {
                 () -> {
                     closeProfilePicker();
                     showSearch(null);
+                },
+                () -> {
+                    dropPicker();
+                    pickerLayer = null;
+                    popoverReturn = null;
+                    refreshAll();
                 });
 
         FrameLayout.LayoutParams plp = (FrameLayout.LayoutParams) panel.getLayoutParams();
@@ -4861,15 +5584,18 @@ public class MainActivity extends Activity {
     }
 
     int netState = -1, netBars = -1;
-    boolean netEthernet;
+    boolean netEthernet, netVpn, vpnConnected;
 
     void updateNet() {
         if (netIcon == null) return;
         android.net.ConnectivityManager cm = getSystemService(android.net.ConnectivityManager.class);
-        android.net.NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
+        android.net.Network active = cm == null ? null : cm.getActiveNetwork();
+        android.net.NetworkCapabilities nc = cm == null || active == null
+                ? null : cm.getNetworkCapabilities(active);
         int state = nc == null ? 0
                 : nc.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) ? 2 : 1;
         boolean eth = nc != null && nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET);
+        boolean vpn = nc != null && nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN);
         int bars = 3;
         if (nc != null && !eth) {
             try {
@@ -4881,10 +5607,12 @@ public class MainActivity extends Activity {
             }
         }
         boolean back = netState == 0 || netState == 1;
-        if (state == netState && eth == netEthernet && bars == netBars) return;
+        if (state == netState && eth == netEthernet && bars == netBars && vpn == netVpn) return;
         netState = state;
         netEthernet = eth;
         netBars = bars;
+        netVpn = vpn;
+        updateVpnButton(vpn);
         netIcon.setImageBitmap(netGlyph(state, eth, bars, dp(20)));
         netIcon.setContentDescription(I18n.t(this, state == 2 ? "Online" : state == 1 ? "No internet" : "Offline"));
         // Back online: refresh what needs the internet.
@@ -4892,6 +5620,26 @@ public class MainActivity extends Activity {
         if (state == 2 && back) {
             Weather.refresh(this, true, this::updateWeather);
             loadHero();
+        }
+    }
+
+    void updateVpnButton(boolean connected) {
+        vpnConnected = connected;
+        if (vpnButton == null) return;
+        int color = vpnButton.isFocused() ? 0xFF111114 : (connected ? 0xFF30D158 : Color.WHITE);
+        vpnButton.setImageBitmap(Glyphs.get("shield", dp(20), color));
+        vpnButton.setContentDescription(I18n.s(this, connected ? "VPN connected" : "VPN settings", connected ? "VPN bağlı" : "VPN ayarları"));
+    }
+
+    void openVpnSettings() {
+        try {
+            startActivity(new Intent(android.provider.Settings.ACTION_VPN_SETTINGS));
+        } catch (Exception unavailable) {
+            try {
+                startActivity(new Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS));
+            } catch (Exception ignored) {
+                // Keep the launcher usable if this TV exposes no VPN settings activity.
+            }
         }
     }
 
@@ -5008,9 +5756,7 @@ public class MainActivity extends Activity {
 
     /** Refresh button: fetch fresh recommendations and news, reload Continue Watching and weather. */
     void refreshAll() {
-        refreshButton.animate().cancel();
-        refreshButton.setRotation(0);
-        refreshButton.animate().rotation(360).setDuration(700).setInterpolator(EASE).start();
+        // The refresh action lives in Control Center; do not animate an off-screen status control.
         Suggestions.changed(this);
         lastCwSig = "";
         heroVersion = -1;
@@ -5291,12 +6037,13 @@ public class MainActivity extends Activity {
 
     /** Shows the cached forecast (hidden when weather is off or nothing has loaded yet). */
     void updateWeather() {
-        if (weatherCard == null) return;
         Weather.Data d = Weather.enabled(this) ? Weather.cached(this) : null;
         if (sceneHome != null) {
             sceneHome.refreshWeatherBtn();
             if (d != null) {
                 sceneHome.sceneView.setWeather(d.temp + "\u00b0", Weather.describe(this, d.code, d.day), d.code);
+                // Refresh the visible dashboard weather glyph and forecast as soon as new data lands.
+                if (sceneHome.isDashboardShowing()) sceneHome.refreshDashboardInPlace();
             } else {
                 sceneHome.sceneView.setWeather(null, null, -1);
             }
@@ -5306,6 +6053,7 @@ public class MainActivity extends Activity {
             boolean showShortcut = bigClock && SceneHome.isWeatherShortcutEnabled(this) && Weather.enabled(this);
             classicWeatherButton.setVisibility(showShortcut ? View.VISIBLE : View.GONE);
         }
+        if (weatherCard == null) return;
         boolean show = d != null && !Scenes.isScenesLook(this) && !bigClock;
         if (!show && weatherCard.isFocused()) focusTop();
         weatherCard.setVisibility(show ? View.VISIBLE : View.GONE);
@@ -5684,7 +6432,7 @@ public class MainActivity extends Activity {
 
     boolean statusFocused() {
         View f = getCurrentFocus();
-        return f != null && (f == ccButton || f == avatarView || f == refreshButton || f == searchButton || f == classicWeatherButton);
+        return f != null && (f == vpnButton || f == ccButton || f == avatarView || f == searchButton || f == classicWeatherButton);
     }
 
     /** Directional focus inside a popover: nearest cell whose centre lies in that direction. */

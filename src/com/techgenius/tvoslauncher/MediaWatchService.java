@@ -34,6 +34,7 @@ public class MediaWatchService extends NotificationListenerService {
 
     MediaSessionManager msm;
     final Map<MediaSession.Token, MediaController.Callback> tracked = new HashMap<>();
+    final Map<MediaSession.Token, MediaController> trackedControllers = new HashMap<>();
     final MediaSessionManager.OnActiveSessionsChangedListener sessions = this::onSessions;
 
     /** Live instance while the listener is connected (Control Center uses it for Do Not Disturb). */
@@ -42,6 +43,7 @@ public class MediaWatchService extends NotificationListenerService {
     private static final android.os.Handler MAIN_HANDLER = new android.os.Handler(android.os.Looper.getMainLooper());
     private static MediaSessionManager fallbackMsm;
     private static final Map<MediaSession.Token, MediaController.Callback> fallbackTracked = new HashMap<>();
+    private static final Map<MediaSession.Token, MediaController> fallbackControllers = new HashMap<>();
     private static boolean fallbackListenerRegistered = false;
     private static boolean periodicPollScheduled = false;
     private static long lastPollMs = 0L;
@@ -72,6 +74,11 @@ public class MediaWatchService extends NotificationListenerService {
 
     @Override
     public void onListenerConnected() {
+        // The fallback poller is only needed while Android has not bound this listener.
+        // Tear it down before enabling the service-backed tracker to avoid duplicate callbacks.
+        clearFallbackTracking();
+        MAIN_HANDLER.removeCallbacks(PERIODIC_POLL_TICK);
+        periodicPollScheduled = false;
         instance = this;
         trackedAppCtx = getApplicationContext();
         try {
@@ -87,13 +94,22 @@ public class MediaWatchService extends NotificationListenerService {
     }
 
     @Override
-    public void onListenerDisconnected() {
+    public synchronized void onListenerDisconnected() {
         instance = null;
         try {
             if (msm != null) msm.removeOnActiveSessionsChangedListener(sessions);
         } catch (Throwable ignored) {
         }
+        for (Map.Entry<MediaSession.Token, MediaController.Callback> entry : tracked.entrySet()) {
+            MediaController controller = trackedControllers.get(entry.getKey());
+            if (controller != null) {
+                try { controller.unregisterCallback(entry.getValue()); } catch (Throwable ignored) { }
+            }
+        }
         tracked.clear();
+        trackedControllers.clear();
+        // Keep Continue Watching alive if Android drops the notification-listener binding.
+        MAIN_HANDLER.post(() -> ensureSessionTracking(getApplicationContext()));
     }
 
     @Override
@@ -103,9 +119,9 @@ public class MediaWatchService extends NotificationListenerService {
         }
     }
 
-    void onSessions(List<MediaController> list) {
-        if (list == null) return;
-        for (MediaController mc : list) {
+    synchronized void onSessions(List<MediaController> list) {
+        java.util.Set<MediaSession.Token> active = new java.util.HashSet<>();
+        if (list != null) for (MediaController mc : list) {
             if (mc == null || mc.getSessionToken() == null) continue;
             if (!tracked.containsKey(mc.getSessionToken())) {
                 MediaController.Callback cb = new MediaController.Callback() {
@@ -118,16 +134,32 @@ public class MediaWatchService extends NotificationListenerService {
                     }
 
                     @Override public void onSessionDestroyed() {
-                        tracked.remove(mc.getSessionToken());
+                        synchronized (MediaWatchService.this) {
+                            tracked.remove(mc.getSessionToken());
+                            trackedControllers.remove(mc.getSessionToken());
+                        }
                     }
                 };
                 try {
                     mc.registerCallback(cb, MAIN_HANDLER);
                     tracked.put(mc.getSessionToken(), cb);
+                    trackedControllers.put(mc.getSessionToken(), mc);
                 } catch (Throwable ignored) {
                 }
             }
+            active.add(mc.getSessionToken());
             Store.record(this, mc.getPackageName(), mc.getMetadata(), mc.getPlaybackState(), mc.getQueueTitle());
+        }
+        java.util.Iterator<Map.Entry<MediaSession.Token, MediaController.Callback>> it = tracked.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<MediaSession.Token, MediaController.Callback> entry = it.next();
+            if (!active.contains(entry.getKey())) {
+                MediaController controller = trackedControllers.remove(entry.getKey());
+                if (controller != null) {
+                    try { controller.unregisterCallback(entry.getValue()); } catch (Throwable ignored) { }
+                }
+                it.remove();
+            }
         }
     }
 
@@ -200,9 +232,10 @@ public class MediaWatchService extends NotificationListenerService {
         ensureSessionTracking(c);
     }
 
-    private static void syncControllersStatic(Context appCtx, List<MediaController> list) {
-        if (appCtx == null || list == null) return;
-        for (MediaController mc : list) {
+    private static synchronized void syncControllersStatic(Context appCtx, List<MediaController> list) {
+        if (appCtx == null) return;
+        java.util.Set<MediaSession.Token> active = new java.util.HashSet<>();
+        if (list != null) for (MediaController mc : list) {
             if (mc == null || mc.getSessionToken() == null) continue;
             if (!fallbackTracked.containsKey(mc.getSessionToken())) {
                 MediaController.Callback cb = new MediaController.Callback() {
@@ -215,17 +248,51 @@ public class MediaWatchService extends NotificationListenerService {
                     }
 
                     @Override public void onSessionDestroyed() {
-                        fallbackTracked.remove(mc.getSessionToken());
+                        synchronized (MediaWatchService.class) {
+                            fallbackTracked.remove(mc.getSessionToken());
+                            fallbackControllers.remove(mc.getSessionToken());
+                        }
                     }
                 };
                 try {
                     mc.registerCallback(cb, MAIN_HANDLER);
                     fallbackTracked.put(mc.getSessionToken(), cb);
+                    fallbackControllers.put(mc.getSessionToken(), mc);
                 } catch (Throwable ignored) {
                 }
             }
+            active.add(mc.getSessionToken());
             Store.record(appCtx, mc.getPackageName(), mc.getMetadata(), mc.getPlaybackState(), mc.getQueueTitle());
         }
+        java.util.Iterator<Map.Entry<MediaSession.Token, MediaController.Callback>> it = fallbackTracked.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<MediaSession.Token, MediaController.Callback> entry = it.next();
+            if (!active.contains(entry.getKey())) {
+                MediaController controller = fallbackControllers.remove(entry.getKey());
+                if (controller != null) {
+                    try { controller.unregisterCallback(entry.getValue()); } catch (Throwable ignored) { }
+                }
+                it.remove();
+            }
+        }
+    }
+
+    private static synchronized void clearFallbackTracking() {
+        try {
+            if (fallbackMsm != null && fallbackListenerRegistered) {
+                fallbackMsm.removeOnActiveSessionsChangedListener(fallbackSessionsListener);
+            }
+        } catch (Throwable ignored) {
+        }
+        fallbackListenerRegistered = false;
+        for (Map.Entry<MediaSession.Token, MediaController.Callback> entry : fallbackTracked.entrySet()) {
+            MediaController controller = fallbackControllers.get(entry.getKey());
+            if (controller != null) {
+                try { controller.unregisterCallback(entry.getValue()); } catch (Throwable ignored) { }
+            }
+        }
+        fallbackTracked.clear();
+        fallbackControllers.clear();
     }
 
     static boolean granted(Context c) {

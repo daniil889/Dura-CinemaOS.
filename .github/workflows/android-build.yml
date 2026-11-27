@@ -1,0 +1,97 @@
+name: Android build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Push and pull_request can both fire for the same PR branch. Keep only the newest build.
+concurrency:
+  group: android-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build APK (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out source (Linux)
+        if: runner.os != 'Windows'
+        uses: actions/checkout@v4
+        with:
+          path: source
+
+      - name: Clone source (Windows trailing-dot path workaround)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_REPO: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          SOURCE_REF: ${{ github.head_ref || github.ref_name }}
+        working-directory: C:\
+        run: |
+          New-Item -ItemType Directory -Force C:\src | Out-Null
+          $token = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$env:GH_TOKEN"))
+          git -c "http.extraheader=AUTHORIZATION: basic $token" clone --depth 1 --branch $env:SOURCE_REF "https://github.com/$env:SOURCE_REPO" C:\src\source
+          if ($LASTEXITCODE -ne 0) { throw "Git clone failed" }
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools"
+
+      - name: Install compiler SDK packages
+        run: sdkmanager "build-tools;34.0.0" "build-tools;35.0.0" "platforms;android-34"
+
+      - name: Build APK (Linux)
+        if: runner.os != 'Windows'
+        run: bash ./build.sh
+        working-directory: source
+
+      - name: Build APK (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: C:\src
+        run: |
+          Set-Location C:\src\source
+          ./build.ps1
+
+      - name: Verify APK exists (Linux)
+        if: runner.os != 'Windows'
+        run: test -s source/build/tvos-home.apk
+
+      - name: Verify APK exists (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: C:\
+        run: if (-not (Test-Path C:\src\source\build\tvos-home.apk)) { throw "APK was not produced" }
+
+      - name: Upload APK (Linux)
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tvos-home-${{ runner.os }}
+          path: source/build/tvos-home.apk
+          if-no-files-found: error
+
+      - name: Upload APK (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tvos-home-${{ runner.os }}
+          path: C:\src\source\build\tvos-home.apk
+          if-no-files-found: error

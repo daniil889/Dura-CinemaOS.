@@ -58,6 +58,7 @@ final class SceneHome {
     LinearLayout whoBar;
     LinearLayout weatherBtn;
     ImageView weatherIcon;
+    private int weatherIconCode = Integer.MIN_VALUE;
     LinearLayout searchBtn;
     ImageView searchIcon;
     LinearLayout moonBtn;
@@ -135,6 +136,7 @@ final class SceneHome {
         String backdropUrl;
         Suggestions.Item sourceItem;
         boolean removable;
+        boolean catalog;
     }
 
     SceneHome(MainActivity host) {
@@ -500,6 +502,26 @@ final class SceneHome {
         if (weatherBtn == null) return;
         boolean show = isWeatherShortcutEnabled(host) && Weather.enabled(host);
         weatherBtn.setVisibility(show ? View.VISIBLE : View.GONE);
+
+        Weather.Data data = show ? Weather.cached(host) : null;
+        int iconType = data == null ? -1 : Weather.iconType(data.code);
+        if (iconType == weatherIconCode) return;
+        weatherIconCode = iconType;
+        if (data == null) {
+            weatherIcon.setImageBitmap(Glyphs.get("cloud", dp(19), 0xFFF4F4F6));
+            return;
+        }
+
+        // Draw the same condition-aware weather glyph used by the forecast cards.
+        int size = dp(22);
+        Weather.WeatherIconView icon = new Weather.WeatherIconView(host);
+        icon.setType(iconType);
+        int spec = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY);
+        icon.measure(spec, spec);
+        icon.layout(0, 0, size, size);
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        icon.draw(new Canvas(bitmap));
+        weatherIcon.setImageBitmap(bitmap);
     }
 
     void refreshSearchBtn() {
@@ -654,7 +676,12 @@ final class SceneHome {
         if (f != null && dashboardCards.contains(f)) {
             return;
         }
-        if ((isAnyAppDockTileFocused() && !HomeDashboard.isShowWhenNoCw(host)) || isShelfShowing() || isAnyPopupShowing()) {
+        // Keep the dashboard mounted while the News widget is enabled. Otherwise the app-tile
+        // focus transition hides the entire dashboard (including the live news feed), so the feed
+        // appears to flicker on and off as focus moves between the control panel and the dock.
+        boolean keepNewsVisible = HomeDashboard.isWidgetNewsEnabled(host);
+        if (((isAnyAppDockTileFocused() && !HomeDashboard.isShowWhenNoCw(host)) || isShelfShowing())
+                && !keepNewsVisible || isAnyPopupShowing()) {
             hideDashboard();
         } else {
             showDashboard();
@@ -897,7 +924,8 @@ final class SceneHome {
                 hideShelf();
                 return;
             }
-            if (!host.cwEnabled()) {
+            if (!host.cwEnabled()
+                    && !StreamingPlatformRegistry.isSupported(a.pkg, a.label)) {
                 hideShelf();
                 if (HomeDashboard.isShowWhenNoCw(host)) {
                     showDashboard();
@@ -1103,6 +1131,27 @@ final class SceneHome {
             }
             out.add(c);
         }
+        if (out.isEmpty() && StreamingPlatformRegistry.isSupported(pkg, appName)) {
+            for (Suggestions.Item it : StreamingCatalog.fetchForPackage(host, pkg, MAX_SHELF_ITEMS)) {
+                if (it == null || it.title == null || it.title.trim().isEmpty()
+                        || it.backdrop == null || it.backdrop.trim().isEmpty()) continue;
+                WatchCardData card = new WatchCardData();
+                card.key = it.key;
+                card.pkg = pkg;
+                card.appName = appName;
+                card.title = it.title;
+                card.subtitle = it.overview == null || it.overview.trim().isEmpty()
+                        ? I18n.s(host, "Open in app", "Open in app") : it.overview;
+                card.progress = 0f;
+                card.backdropUrl = it.backdrop;
+                card.sourceItem = it;
+                card.removable = false;
+                card.catalog = true;
+                card.thumb = shelfThumbs.get(it.backdrop);
+                out.add(card);
+                if (out.size() >= MAX_SHELF_ITEMS) break;
+            }
+        }
         return out;
     }
 
@@ -1113,7 +1162,8 @@ final class SceneHome {
     }
 
     private void populateWatchRow(String pkg, List<WatchCardData> cards, int forcedFocusSlot) {
-        if (cards == null || cards.isEmpty() || !host.cwEnabled() || moreExpanded || moveDockIdx >= 0
+        boolean catalogOnly = cards != null && !cards.isEmpty() && cards.get(0).catalog;
+        if (cards == null || cards.isEmpty() || (!host.cwEnabled() && !catalogOnly) || moreExpanded || moveDockIdx >= 0
                 || pkg == null || !pkg.equals(activeShelfPkg)) {
             boolean wasFocusedInShelf = shelfCards.contains(host.getCurrentFocus());
             animateShelfOut();
@@ -1126,6 +1176,11 @@ final class SceneHome {
             return;
         }
         hideDashboard();
+        if (shelfHeader != null) {
+            shelfHeader.setText(catalogOnly
+                    ? I18n.s(host, "Explore", "Explore")
+                    : I18n.s(host, "Continue watching", "İzlemeye devam et"));
+        }
         boolean wasVisible = shelfBox.getVisibility() == View.VISIBLE && !shelfHiding;
         StringBuilder sb = new StringBuilder(pkg).append("::");
         for (int i = 0; i < cards.size() && i < MAX_SHELF_ITEMS; i++) {
@@ -1486,7 +1541,7 @@ final class SceneHome {
         final int classicIdx = Math.max(0, host.classicCwCards.indexOf(anchor));
         List<String> labels = new ArrayList<>();
         List<Runnable> actions = new ArrayList<>();
-        labels.add(I18n.s(host, "Resume", "Devam Et"));
+        labels.add(d.catalog ? I18n.s(host, "Open", "Open") : I18n.s(host, "Resume", "Devam Et"));
         actions.add(() -> openWatchCard(d));
         int destructive = -1;
         if (d.removable && d.key != null) {

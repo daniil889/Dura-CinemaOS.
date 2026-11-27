@@ -57,6 +57,13 @@ public final class ControlPanelOverlay {
     private static View memBarFill;
     private static android.graphics.Bitmap cachedSceneBlur;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
+    // Reuse one short-lived screenshot worker. A zero-length queue prevents rapid panel
+    // open/close cycles from accumulating stale captures; a concurrent request falls back to
+    // the non-blurred glass path through the existing exception handler.
+    private static final java.util.concurrent.ThreadPoolExecutor SCREENSHOT_EXECUTOR =
+            new java.util.concurrent.ThreadPoolExecutor(0, 1, 10L, java.util.concurrent.TimeUnit.SECONDS,
+                    new java.util.concurrent.SynchronousQueue<>(),
+                    new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
 
     public interface Status {
         String get();
@@ -164,7 +171,7 @@ public final class ControlPanelOverlay {
         try {
             svc.takeScreenshot(
                     android.view.Display.DEFAULT_DISPLAY,
-                    java.util.concurrent.Executors.newSingleThreadExecutor(),
+                    SCREENSHOT_EXECUTOR,
                     new android.accessibilityservice.AccessibilityService.TakeScreenshotCallback() {
                         @Override
                         public void onSuccess(android.accessibilityservice.AccessibilityService.ScreenshotResult res) {
@@ -305,6 +312,12 @@ public final class ControlPanelOverlay {
                     if (!startExternal(svcCtx, new Intent(Intent.ACTION_ASSIST))) {
                         startExternal(svcCtx, new Intent("android.search.action.GLOBAL_SEARCH"));
                     }
+                },
+                () -> {
+                    dismiss();
+                    if (MainActivity.activeInstance != null && MainActivity.activeInstance.resumed) {
+                        MainActivity.activeInstance.refreshAll();
+                    }
                 });
 
         FrameLayout.LayoutParams plp = (FrameLayout.LayoutParams) panel.getLayoutParams();
@@ -415,11 +428,22 @@ public final class ControlPanelOverlay {
             MainActivity.LiquidGlass.Backdrop glassSource,
             int screenW,
             int screenH) {
-        MainActivity.LiquidGlass.Backdrop bgSrc = glassSource != null ? glassSource : () -> null;
-        MainActivity.LiquidGlass glass = new MainActivity.LiquidGlass(
-                radius, 0x24FFFFFF, bgSrc, screenW, screenH, unit).adaptive().darker(0x59);
-        glass.lens = dp(unit, 7);
-        return glass;
+        // tvOS 26/27 Control Center uses a backdrop-aware glass material. Keep a light
+        // fallback for 1 GB devices, where a second live material pass can cost real frames.
+        if (!MainActivity.LiquidGlass.lowRamMode && glassSource != null) {
+            MainActivity.LiquidGlass glass = new MainActivity.LiquidGlass(
+                    radius, 0x28FFFFFF, glassSource, screenW, screenH, unit).adaptive();
+            glass.lens = dp(unit, 3.5f);
+            glass.rimStrength = 0.82f;
+            return glass;
+        }
+        GradientDrawable surface = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0x3AFFFFFF, 0x1AFFFFFF});
+        surface.setShape(GradientDrawable.RECTANGLE);
+        surface.setCornerRadius(radius);
+        surface.setStroke(Math.max(1, dp(unit, 1)), 0x42FFFFFF);
+        return surface;
     }
 
     /**
@@ -436,18 +460,48 @@ public final class ControlPanelOverlay {
             Runnable onInputs,
             Runnable onButtonMapper,
             Runnable onSettings,
-            Runnable onSearch) {
+            Runnable onSearch,
+            Runnable onRefresh) {
 
-        int col = dp(unit, 141);
-        int gap = dp(unit, 11);
-        int cap = dp(unit, 56);
-        int small = (2 * col + gap - 3 * gap) / 4;
+        int col = dp(unit, 184);
+        int gap = dp(unit, 12);
+        int cap = dp(unit, 60);
+        int small = (2 * col + gap - 4 * gap) / 5;
         int w = 2 * col + gap;
-        int pad = 0;
+        int pad = dp(unit, 16);
+        int headerH = dp(unit, 24);
+        int contentTop = headerH + gap;
 
         FrameLayout panel = new FrameLayout(c);
         panel.setClipChildren(false);
         panel.setClipToPadding(false);
+        GradientDrawable panelFallback = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0xD92A303B, 0xD51A1E27});
+        panelFallback.setCornerRadius(dp(unit, 28));
+        panelFallback.setStroke(Math.max(1, dp(unit, 1)), 0x55FFFFFF);
+        android.graphics.drawable.Drawable panelGlass = null;
+        if (!MainActivity.LiquidGlass.lowRamMode && glassSource != null) {
+            MainActivity.LiquidGlass material = new MainActivity.LiquidGlass(
+                    dp(unit, 28), 0x6B171B24, glassSource, screenW, screenH, unit).adaptive();
+            material.lens = dp(unit, 7);
+            material.rimStrength = 0.92f;
+            panelGlass = material;
+        }
+        panel.setBackground(panelGlass != null ? panelGlass : panelFallback);
+        panel.setElevation(dp(unit, 22));
+
+        TextView panelTitle = new TextView(c);
+        Ui.textSize(panelTitle, 16f);
+        panelTitle.setTypeface(Ui.font(c, "semibold"));
+        panelTitle.setTextColor(0xFFFFFFFF);
+        panelTitle.setShadowLayer(dp(unit, 8), 0, dp(unit, 1), 0x66000000);
+        panelTitle.setText(I18n.s(c, "Control Center", "Kontrol Merkezi"));
+        panelTitle.setGravity(Gravity.CENTER_VERTICAL);
+        FrameLayout.LayoutParams titleLp = new FrameLayout.LayoutParams(w, headerH, Gravity.TOP | Gravity.START);
+        titleLp.leftMargin = pad;
+        titleLp.topMargin = pad;
+        panel.addView(panelTitle, titleLp);
 
         final class CapsuleSpec {
             final String glyph;
@@ -476,6 +530,12 @@ public final class ControlPanelOverlay {
             capsules.add(new CapsuleSpec("bluetooth", "Bluetooth", () -> bluetoothState(c), v -> {
                 dismissAll(c);
                 openBluetoothSettings(c);
+            }, false));
+        }
+        if (isItemEnabled(c, ITEM_VPN)) {
+            capsules.add(new CapsuleSpec("shield", "VPN", () -> vpnState(c), v -> {
+                dismissAll(c);
+                openVpnSettings(c);
             }, false));
         }
         if (isItemEnabled(c, ITEM_MEMORY)) {
@@ -527,7 +587,7 @@ public final class ControlPanelOverlay {
             int colIdx = i % 2;
             int rowIdx = i / 2;
             int x = pad + colIdx * (col + gap);
-            int y = pad + rowIdx * (cap + gap);
+            int y = pad + contentTop + rowIdx * (cap + gap);
             View tile = makeTile(c, panel, x, y, col, cap, unit, screenW, screenH, glassSource,
                     cs.glyph, cs.title, cs.status, cs.click);
             if (cs.isMemory) {
@@ -537,11 +597,11 @@ public final class ControlPanelOverlay {
         }
 
         int capsuleRows = (capsules.size() + 1) / 2;
-        int y4 = capsuleRows > 0 ? capsuleRows * (cap + gap) : 0;
+        int y4 = contentTop + (capsuleRows > 0 ? capsuleRows * (cap + gap) : 0);
 
-        String[] itemKeys = {ITEM_INPUTS, ITEM_MAPPER, ITEM_SETTINGS, ITEM_SEARCH};
-        String[] icons = {"input", "remote", "gear", "search"};
-        Runnable[] actions = {onInputs, onButtonMapper, onSettings, onSearch};
+        String[] itemKeys = {ITEM_INPUTS, ITEM_MAPPER, ITEM_SETTINGS, ITEM_SEARCH, ITEM_REFRESH, ITEM_BRIGHTNESS};
+        String[] icons = {"input", "remote", "gear", "search", "refresh", "sliders"};
+        Runnable[] actions = {onInputs, onButtonMapper, onSettings, onSearch, onRefresh, () -> DisplayBrightness.show(c)};
         List<Integer> enabledSmallIdx = new ArrayList<>();
         for (int i = 0; i < itemKeys.length; i++) {
             if (isItemEnabled(c, itemKeys[i])) {
@@ -552,18 +612,21 @@ public final class ControlPanelOverlay {
             // Never allow a completely empty panel; keep Settings accessible
             enabledSmallIdx.add(2);
         }
+        int smallRows = (enabledSmallIdx.size() + 4) / 5;
         for (int sIdx = 0; sIdx < enabledSmallIdx.size(); sIdx++) {
             int i = enabledSmallIdx.get(sIdx);
             final Runnable act = actions[i];
-            outCells.add(makeTile(c, panel, pad + sIdx * (small + gap), pad + y4, small, small, unit, screenW, screenH, glassSource,
+            int smallX = pad + (sIdx % 5) * (small + gap);
+            int smallY = pad + y4 + (sIdx / 5) * (small + gap);
+            outCells.add(makeTile(c, panel, smallX, smallY, small, small, unit, screenW, screenH, glassSource,
                     icons[i], null, null, v -> {
                         if (act != null) act.run();
                     }));
         }
 
         int totalH = !enabledSmallIdx.isEmpty()
-                ? (y4 + small)
-                : Math.max(0, capsuleRows * (cap + gap) - gap);
+                ? (y4 + smallRows * small + Math.max(0, smallRows - 1) * gap)
+                : contentTop + Math.max(0, capsuleRows * (cap + gap) - gap);
 
         if (isItemEnabled(c, ITEM_WEATHER_PANEL)) {
             int yWeather = totalH > 0 ? (totalH + gap) : 0;
@@ -574,10 +637,21 @@ public final class ControlPanelOverlay {
         }
         if (totalH <= 0) totalH = cap;
 
-        FrameLayout.LayoutParams plp = new FrameLayout.LayoutParams(w + 2 * pad, totalH + 2 * pad, Gravity.TOP | Gravity.END);
+        int panelW = w + 2 * pad;
+        int panelH = totalH + 2 * pad;
+        FrameLayout.LayoutParams plp = new FrameLayout.LayoutParams(panelW, panelH, Gravity.TOP | Gravity.END);
         plp.topMargin = dp(unit, 36);
         plp.rightMargin = dp(unit, 28);
         panel.setLayoutParams(plp);
+
+        // Keep every tile inside the visible safe area on short or overscanned TV displays.
+        float availableW = Math.max(1f, screenW - dp(unit, 56));
+        float availableH = Math.max(1f, screenH - dp(unit, 112));
+        float fit = Math.min(1f, Math.min(availableW / panelW, availableH / panelH));
+        panel.setPivotX(panelW);
+        panel.setPivotY(0f);
+        panel.setScaleX(fit);
+        panel.setScaleY(fit);
         return panel;
     }
 
@@ -892,6 +966,7 @@ public final class ControlPanelOverlay {
         int gs = iconOnly ? dp(unit, 26) : dp(unit, 25);
         ImageView gi = new ImageView(c);
         int baseIconColor = ("wifi".equals(glyph) || "bluetooth".equals(glyph)) ? 0xFF0A84FF
+                : "shield".equals(glyph) && isVpnConnected(c) ? 0xFF30D158
                 : "ambient".equals(glyph) ? 0xFFFFD60A
                 : "power".equals(glyph) ? 0xFFFF453A
                 : Color.WHITE;
@@ -958,8 +1033,9 @@ public final class ControlPanelOverlay {
                 ((GradientDrawable) ((View) memBarFill.getParent()).getBackground()).setColor(has ? 0x33111114 : 0x40FFFFFF);
                 ((GradientDrawable) memBarFill.getBackground()).setColor(has ? 0xFF111114 : (memoryUsed(c) > 0.85f ? 0xFFFF9F0A : Color.WHITE));
             }
-            v.animate().scaleX(has ? 1.05f : 1f).scaleY(has ? 1.05f : 1f)
-                    .setDuration(180).setInterpolator(MainActivity.LIFT).start();
+            v.animate().withLayer().scaleX(has ? 1.045f : 1f).scaleY(has ? 1.045f : 1f)
+                    .translationZ(has ? dp(unit, 8) : 0f)
+                    .setDuration(has ? 205 : 165).setInterpolator(MainActivity.LIFT).start();
         });
 
         t.setOnClickListener(v -> {
@@ -1242,6 +1318,7 @@ public final class ControlPanelOverlay {
 
     public static final String ITEM_WIFI = "wifi";
     public static final String ITEM_BLUETOOTH = "bluetooth";
+    public static final String ITEM_VPN = "vpn";
     public static final String ITEM_MEMORY = "memory";
     public static final String ITEM_DND = "dnd";
     public static final String ITEM_AUDIO = "audio";
@@ -1252,11 +1329,14 @@ public final class ControlPanelOverlay {
     public static final String ITEM_MAPPER = "mapper";
     public static final String ITEM_SETTINGS = "settings";
     public static final String ITEM_SEARCH = "search";
+    public static final String ITEM_REFRESH = "refresh";
+    public static final String ITEM_BRIGHTNESS = "brightness";
     public static final String ITEM_WEATHER_PANEL = "weather_panel";
 
     public static final String[][] ALL_CP_ITEMS = {
         {ITEM_WIFI, "Wi-Fi", "Wi-Fi"},
         {ITEM_BLUETOOTH, "Bluetooth", "Bluetooth"},
+        {ITEM_VPN, "VPN", "VPN"},
         {ITEM_MEMORY, "Memory / Recent Apps", "Bellek / Son Uygulamalar"},
         {ITEM_DND, "Do Not Disturb", "Rahatsız Etmeyin"},
         {ITEM_AUDIO, "Audio Output", "Ses Çıkışı"},
@@ -1267,6 +1347,8 @@ public final class ControlPanelOverlay {
         {ITEM_MAPPER, "Button Mapper Shortcut", "Tuş Atayıcı Kısayolu"},
         {ITEM_SETTINGS, "Settings Shortcut", "Ayarlar Kısayolu"},
         {ITEM_SEARCH, "Search / Assistant Shortcut", "Arama / Asistan Kısayolu"},
+        {ITEM_REFRESH, "Refresh Home Content", "Ana Ekran İçeriğini Yenile"},
+        {ITEM_BRIGHTNESS, "Display Brightness", "Ekran Parlaklığı"},
         {ITEM_WEATHER_PANEL, "Weather Panel (Current & Tomorrow)", "Hava Durumu Paneli (Şimdi ve Yarın)"}
     };
 
@@ -1428,6 +1510,59 @@ public final class ControlPanelOverlay {
             }
         }
         return false;
+    }
+
+    private static boolean isVpnConnected(Context c) {
+        try {
+            ConnectivityManager cm = c.getSystemService(ConnectivityManager.class);
+            if (cm == null) return false;
+            NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
+            return nc != null && nc.hasTransport(NetworkCapabilities.TRANSPORT_VPN);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    public static String vpnState(Context c) {
+        try {
+            ConnectivityManager cm = c.getSystemService(ConnectivityManager.class);
+            if (cm == null) return I18n.s(c, "Status unavailable", "Durum kullanılamıyor");
+            return isVpnConnected(c)
+                    ? I18n.s(c, "Connected", "Bağlı")
+                    : I18n.s(c, "Not Connected", "Bağlı Değil");
+        } catch (Exception e) {
+            return I18n.s(c, "Status unavailable", "Durum kullanılamıyor");
+        }
+    }
+
+    public static void openVpnSettings(Context c) {
+        // Prefer the installed VPN client itself. Android TV often exposes only a generic
+        // VPN settings page, which is not where users expect this shortcut to take them.
+        try {
+            android.content.pm.PackageManager pm = c.getPackageManager();
+            List<android.content.pm.ResolveInfo> services = pm.queryIntentServices(
+                    new Intent("android.net.VpnService"), 0);
+            String preferredPackage = null;
+            for (android.content.pm.ResolveInfo service : services) {
+                if (service == null || service.serviceInfo == null) continue;
+                String pkg = service.serviceInfo.packageName;
+                if (pkg == null || pkg.isEmpty()) continue;
+                Intent launch = pm.getLaunchIntentForPackage(pkg);
+                if (launch == null) continue;
+                if (preferredPackage == null) preferredPackage = pkg;
+                CharSequence label = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0));
+                if (label != null && label.toString().toLowerCase(java.util.Locale.ROOT).contains("vpn")) {
+                    preferredPackage = pkg;
+                    break;
+                }
+            }
+            if (preferredPackage != null) {
+                Intent launch = pm.getLaunchIntentForPackage(preferredPackage);
+                if (launch != null && startExternal(c, launch)) return;
+            }
+        } catch (Throwable ignored) { }
+        startExternal(c, new Intent(Settings.ACTION_VPN_SETTINGS),
+                new Intent(Settings.ACTION_WIRELESS_SETTINGS), new Intent(Settings.ACTION_SETTINGS));
     }
 
     public static void openWifiSettings(Context c) {

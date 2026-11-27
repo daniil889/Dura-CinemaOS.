@@ -13,15 +13,17 @@ SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
 [ -d "$SDK" ] || SDK="$HOME/Android/Sdk"  # Linux default
 BT="$SDK/build-tools/34.0.0"
 JAR="$SDK/platforms/android-34/android.jar"
-for f in "$BT/aapt2" "$BT/d8" "$JAR"; do
+for f in "$BT/aapt2" "$BT/d8" "$BT/zipalign" "$BT/apksigner" "$JAR"; do
     [ -e "$f" ] || { echo "Missing $f — install build-tools 34.0.0 and platform android-34 (sdkmanager), or set ANDROID_HOME." >&2; exit 1; }
 done
-command -v javac >/dev/null || { echo "javac not found — install JDK 17+ or set JAVA_HOME." >&2; exit 1; }
+for tool in javac jar keytool java zip; do
+    command -v "$tool" >/dev/null || { echo "$tool not found — install JDK 17+ and zip, or set JAVA_HOME." >&2; exit 1; }
+done
 
 rm -rf build && mkdir -p build/gen build/classes build/dex
 
 "$BT/aapt2" compile --dir res -o build/res.zip
-"$BT/aapt2" link -o build/unsigned.apk -I "$JAR" --manifest AndroidManifest.xml \
+"$BT/aapt2" link -o build/unsigned.apk -I "$JAR" --manifest AndroidManifest.xml --custom-package com.techgenius.tvoslauncher \
     -A assets --java build/gen --min-sdk-version 23 --target-sdk-version 34 \
     --version-code "${VERSION_CODE:-17}" --version-name "${VERSION_NAME:-2.2.5}" build/res.zip
 
@@ -44,11 +46,14 @@ else
     KS=debug.keystore
     if [ ! -f "$KS" ]; then
         keytool -genkeypair -keystore "$KS" -storepass android -keypass android -alias debug \
-            -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=tvOS Launcher debug" >/dev/null
+            -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=tvOS Launcher debug" -noprompt >/dev/null
     fi
     "$BT/apksigner" sign --ks "$KS" --ks-pass pass:android --key-pass pass:android \
         --out build/tvos-home.apk build/aligned.apk
     echo "Signed with the local debug key (development build)"
 fi
+
+"$BT/zipalign" -c -v 4 build/tvos-home.apk
+"$BT/apksigner" verify --verbose build/tvos-home.apk
 
 echo "Built build/tvos-home.apk"

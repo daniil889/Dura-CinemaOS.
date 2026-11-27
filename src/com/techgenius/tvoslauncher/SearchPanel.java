@@ -626,6 +626,7 @@ final class SearchPanel {
     /** tvOS Launcher's own screens and the TV settings people look for: name, keywords, glyph, action. */
     List<Object[]> actions() {
         List<Object[]> l = new ArrayList<>();
+        l.add(new Object[]{tr("AI Assistant", "AI Assistant"), "ai assistant chat model ollama qwen llama gemma yapay zeka", "sparkles", (Runnable) () -> { close(); AssistantPanel.show(a); }});
         l.add(new Object[]{tr("Control Center", "Denetim Merkezi"), "controls power sleep denetim g\u00fc\u00e7 uyku \u05dc\u05d5\u05d7 \u05d1\u05e7\u05e8\u05d4 \u05db\u05d9\u05d1\u05d5\u05d9 \u05e9\u05d9\u05e0\u05d4", "controls", (Runnable) () -> { close(); a.showControlCenter(); }});
         l.add(new Object[]{tr("Weather Forecast", "Hava Durumu Tahmini"), "weather temperature rain hava s\u0131cakl\u0131k ya\u011fmur \u05de\u05d6\u05d2 \u05d0\u05d5\u05d5\u05d9\u05e8 \u05d8\u05de\u05e4\u05e8\u05d8\u05d5\u05e8\u05d4 \u05d2\u05e9\u05dd \u05ea\u05d7\u05d6\u05d9\u05ea", "refresh", (Runnable) () -> { close(); a.showWeather(); }});
         l.add(new Object[]{tr("Switch Profile", "Profil De\u011fi\u015ftir"), "profile user who profil kullan\u0131c\u0131 ki\u015fi \u05e4\u05e8\u05d5\u05e4\u05d9\u05dc \u05de\u05e9\u05ea\u05de\u05e9 \u05e6\u05d5\u05e4\u05d4", "controls", (Runnable) () -> { close(); a.showProfilePicker(false); }});
