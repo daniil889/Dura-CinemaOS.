@@ -463,7 +463,7 @@ public final class ControlPanelOverlay {
             Runnable onSearch,
             Runnable onRefresh) {
 
-        int col = dp(unit, 158);
+        int col = dp(unit, 184);
         int gap = dp(unit, 12);
         int cap = dp(unit, 60);
         int small = (2 * col + gap - 4 * gap) / 5;

@@ -2983,9 +2983,32 @@ public class MainActivity extends Activity {
         showClassicCwForPackage(a.pkg);
     }
 
-    /** Media eligibility is kept separate from the Activity; content itself is never fabricated. */
+    /** Strict allow-list: known streaming apps, including YouTube when it publishes TV content rows. */
     boolean isStreamingPlatform(AppEntry app) {
-        return app != null && StreamingPlatformRegistry.isSupported(app.pkg, app.label);
+        if (app == null || app.pkg == null) return false;
+        String pkg = app.pkg.toLowerCase(java.util.Locale.ROOT);
+        String label = app.label == null ? "" : app.label.toLowerCase(java.util.Locale.ROOT);
+        if (pkg.contains("browser") || label.contains("browser")) return false;
+        // Exact service identifiers avoid accidental matches such as "activity" containing "ivi".
+        if (pkg.contains("youtube") || label.contains("youtube")
+                || pkg.contains("kinopoisk") || label.contains("кинопоиск")
+                || pkg.startsWith("ru.ivi") || label.equals("ivi") || label.startsWith("ivi ")
+                || pkg.contains("okko") || label.contains("okko")
+                || pkg.contains("zona") || label.contains("zona")
+                || pkg.contains("rutube") || label.contains("rutube")
+                || pkg.contains("netflix") || label.contains("netflix")
+                || pkg.contains("amazonvideo") || pkg.contains("primevideo") || label.contains("prime video")
+                || pkg.contains("disney") || label.contains("disney+")
+                || pkg.contains("appletv") || label.equals("apple tv")
+                || pkg.contains("hbomax") || label.equals("max") || label.startsWith("max ")
+                || pkg.contains("hulu") || label.equals("hulu")
+                || pkg.contains("paramount") || label.contains("paramount")
+                || pkg.contains("peacock") || label.contains("peacock")
+                || pkg.contains("crunchyroll") || label.contains("crunchyroll")
+                || pkg.contains("hotstar") || label.contains("hotstar")
+                || pkg.contains("zee5") || label.contains("zee5")
+                || pkg.contains("sonyliv") || label.contains("sonyliv")) return true;
+        return false;
     }
 
     /** Shows a lightweight app-specific Top Shelf scene when the app has no Continue Watching row. */
@@ -6000,13 +6023,12 @@ public class MainActivity extends Activity {
 
     /** Shows the cached forecast (hidden when weather is off or nothing has loaded yet). */
     void updateWeather() {
+        if (weatherCard == null) return;
         Weather.Data d = Weather.enabled(this) ? Weather.cached(this) : null;
         if (sceneHome != null) {
             sceneHome.refreshWeatherBtn();
             if (d != null) {
                 sceneHome.sceneView.setWeather(d.temp + "\u00b0", Weather.describe(this, d.code, d.day), d.code);
-                // Refresh the visible dashboard weather glyph and forecast as soon as new data lands.
-                if (sceneHome.isDashboardShowing()) sceneHome.refreshDashboardInPlace();
             } else {
                 sceneHome.sceneView.setWeather(null, null, -1);
             }
@@ -6016,7 +6038,6 @@ public class MainActivity extends Activity {
             boolean showShortcut = bigClock && SceneHome.isWeatherShortcutEnabled(this) && Weather.enabled(this);
             classicWeatherButton.setVisibility(showShortcut ? View.VISIBLE : View.GONE);
         }
-        if (weatherCard == null) return;
         boolean show = d != null && !Scenes.isScenesLook(this) && !bigClock;
         if (!show && weatherCard.isFocused()) focusTop();
         weatherCard.setVisibility(show ? View.VISIBLE : View.GONE);
