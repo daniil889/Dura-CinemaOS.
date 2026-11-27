@@ -654,7 +654,12 @@ final class SceneHome {
         if (f != null && dashboardCards.contains(f)) {
             return;
         }
-        if ((isAnyAppDockTileFocused() && !HomeDashboard.isShowWhenNoCw(host)) || isShelfShowing() || isAnyPopupShowing()) {
+        // Keep the dashboard mounted while the News widget is enabled. Otherwise the app-tile
+        // focus transition hides the entire dashboard (including the live news feed), so the feed
+        // appears to flicker on and off as focus moves between the control panel and the dock.
+        boolean keepNewsVisible = HomeDashboard.isWidgetNewsEnabled(host);
+        if (((isAnyAppDockTileFocused() && !HomeDashboard.isShowWhenNoCw(host)) || isShelfShowing())
+                && !keepNewsVisible || isAnyPopupShowing()) {
             hideDashboard();
         } else {
             showDashboard();
