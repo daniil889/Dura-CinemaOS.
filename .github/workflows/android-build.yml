@@ -31,6 +31,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SOURCE_REPO: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           SOURCE_REF: ${{ github.head_ref || github.ref_name }}
+        working-directory: C:\
         run: |
           New-Item -ItemType Directory -Force C:\src | Out-Null
           $token = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$env:GH_TOKEN"))
@@ -56,6 +57,7 @@ jobs:
       - name: Build APK (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
+        working-directory: C:\src
         run: |
           Set-Location C:\src\source
           ./build.ps1
@@ -67,6 +69,7 @@ jobs:
       - name: Verify APK exists (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
+        working-directory: C:\
         run: if (-not (Test-Path C:\src\source\build\tvos-home.apk)) { throw "APK was not produced" }
 
       - name: Upload APK (Linux)
