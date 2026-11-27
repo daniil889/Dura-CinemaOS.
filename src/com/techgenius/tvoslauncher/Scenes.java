@@ -657,7 +657,8 @@ public final class Scenes {
     // ─── Classic Appearance Big Clock & Clock Alignment ───
 
     public static boolean isClassicBigClockEnabled(Context c) {
-        return prefs(c).getBoolean("classic_big_clock", true);
+        // tvOS keeps the status time compact in the top bar; the oversized clock remains optional.
+        return prefs(c).getBoolean("classic_big_clock", false);
     }
 
     public static void setClassicBigClockEnabled(Context c, boolean enabled) {
