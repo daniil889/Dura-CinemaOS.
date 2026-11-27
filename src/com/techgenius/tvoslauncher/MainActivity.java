@@ -4909,7 +4909,9 @@ public class MainActivity extends Activity {
     void updateNet() {
         if (netIcon == null) return;
         android.net.ConnectivityManager cm = getSystemService(android.net.ConnectivityManager.class);
-        android.net.NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
+        android.net.Network active = cm == null ? null : cm.getActiveNetwork();
+        android.net.NetworkCapabilities nc = cm == null || active == null
+                ? null : cm.getNetworkCapabilities(active);
         int state = nc == null ? 0
                 : nc.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) ? 2 : 1;
         boolean eth = nc != null && nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET);
