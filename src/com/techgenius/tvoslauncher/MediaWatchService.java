@@ -74,6 +74,11 @@ public class MediaWatchService extends NotificationListenerService {
 
     @Override
     public void onListenerConnected() {
+        // The fallback poller is only needed while Android has not bound this listener.
+        // Tear it down before enabling the service-backed tracker to avoid duplicate callbacks.
+        clearFallbackTracking();
+        MAIN_HANDLER.removeCallbacks(PERIODIC_POLL_TICK);
+        periodicPollScheduled = false;
         instance = this;
         trackedAppCtx = getApplicationContext();
         try {
@@ -268,6 +273,24 @@ public class MediaWatchService extends NotificationListenerService {
                 it.remove();
             }
         }
+    }
+
+    private static synchronized void clearFallbackTracking() {
+        try {
+            if (fallbackMsm != null && fallbackListenerRegistered) {
+                fallbackMsm.removeOnActiveSessionsChangedListener(fallbackSessionsListener);
+            }
+        } catch (Throwable ignored) {
+        }
+        fallbackListenerRegistered = false;
+        for (Map.Entry<MediaSession.Token, MediaController.Callback> entry : fallbackTracked.entrySet()) {
+            MediaController controller = fallbackControllers.get(entry.getKey());
+            if (controller != null) {
+                try { controller.unregisterCallback(entry.getValue()); } catch (Throwable ignored) { }
+            }
+        }
+        fallbackTracked.clear();
+        fallbackControllers.clear();
     }
 
     static boolean granted(Context c) {
