@@ -2371,7 +2371,7 @@ public class MainActivity extends Activity {
         if (switcher == null) return;
         if (!"suggest".equals(shelfMode)) setShelfMode("suggest");
         boolean show = tabsShown();
-        if (!show && switcher.isFocused()) ccButton.requestFocus();
+        if (!show && switcher.isFocused()) vpnButton.requestFocus();
         switcher.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
