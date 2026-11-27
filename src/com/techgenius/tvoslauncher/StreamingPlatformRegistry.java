@@ -37,7 +37,18 @@ final class StreamingPlatformRegistry {
                 || pkg.contains("crunchyroll") || label.contains("crunchyroll")
                 || pkg.contains("hotstar") || label.contains("hotstar")
                 || pkg.contains("zee5") || label.contains("zee5")
-                || pkg.contains("sonyliv") || label.contains("sonyliv");
+                || pkg.contains("sonyliv") || label.contains("sonyliv")
+                || isRussianStreamingService(pkg, label);
+    }
+
+    static boolean isRussianStreamingService(String packageName, String appLabel) {
+        String pkg = packageName == null ? "" : packageName.toLowerCase(Locale.ROOT);
+        String label = appLabel == null ? "" : appLabel.toLowerCase(Locale.ROOT).trim();
+        return pkg.contains("okko") || label.contains("okko")
+                || pkg.contains("wink") || label.equals("wink")
+                || pkg.contains("ivi") || label.equals("ivi") || label.contains("иви")
+                || pkg.contains("start") || label.equals("start") || label.equals("старт")
+                || pkg.contains("premier") || label.contains("premier") || label.contains("премьер");
     }
 
     static boolean isYouTube(String packageName, String appLabel) {
