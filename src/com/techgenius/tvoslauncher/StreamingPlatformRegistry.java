@@ -45,4 +45,10 @@ final class StreamingPlatformRegistry {
         String label = appLabel == null ? "" : appLabel.toLowerCase(Locale.ROOT);
         return pkg.contains("youtube") || label.contains("youtube");
     }
+
+    static boolean isKinopoisk(String packageName, String appLabel) {
+        String pkg = packageName == null ? "" : packageName.toLowerCase(Locale.ROOT);
+        String label = appLabel == null ? "" : appLabel.toLowerCase(Locale.ROOT);
+        return pkg.contains("kinopoisk") || label.contains("кинопоиск");
+    }
 }
