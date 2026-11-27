@@ -57,6 +57,11 @@ public final class ControlPanelOverlay {
     private static View memBarFill;
     private static android.graphics.Bitmap cachedSceneBlur;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
+    // Reuse a short-lived worker for screenshot capture; creating a new executor per panel open
+    // would leave one idle thread behind every time the Control Center is shown.
+    private static final java.util.concurrent.ThreadPoolExecutor SCREENSHOT_EXECUTOR =
+            new java.util.concurrent.ThreadPoolExecutor(0, 1, 10L, java.util.concurrent.TimeUnit.SECONDS,
+                    new java.util.concurrent.LinkedBlockingQueue<>());
 
     public interface Status {
         String get();
@@ -164,7 +169,7 @@ public final class ControlPanelOverlay {
         try {
             svc.takeScreenshot(
                     android.view.Display.DEFAULT_DISPLAY,
-                    java.util.concurrent.Executors.newSingleThreadExecutor(),
+                    SCREENSHOT_EXECUTOR,
                     new android.accessibilityservice.AccessibilityService.TakeScreenshotCallback() {
                         @Override
                         public void onSuccess(android.accessibilityservice.AccessibilityService.ScreenshotResult res) {
