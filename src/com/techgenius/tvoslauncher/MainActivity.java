@@ -2398,10 +2398,11 @@ public class MainActivity extends Activity {
         switcher.setFocusable(true);
         tabSuggestBg = new GradientDrawable();
         tabContinueBg = new GradientDrawable();
-        tabSuggest = tab(I18n.t(this, "Suggestions"), tabSuggestBg);
-        tabContinue = tab(I18n.t(this, "Continue Watching"), tabContinueBg);
+        tabSuggest = tab(I18n.t(this, "Apps"), tabSuggestBg);
+        tabContinue = null;
         switcher.addView(tabSuggest, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, h - dp(6)));
-        switcher.addView(tabContinue, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, h - dp(6)));
+        switcher.setContentDescription(I18n.t(this, "All apps"));
+        switcher.setOnClickListener(v -> enterFolder());
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, h,
                 Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         lp.topMargin = dp(26);
@@ -2427,14 +2428,10 @@ public class MainActivity extends Activity {
 
     /** Selected tab: soft glass pill; white with dark text while the tab bar has focus (tvOS). */
     void styleTabs() {
+        if (switcher == null || tabSuggest == null) return;
         boolean focused = switcher.isFocused();
-        boolean sug = !"continue".equals(shelfMode);
-        TextView on = sug ? tabSuggest : tabContinue, off = sug ? tabContinue : tabSuggest;
-        GradientDrawable onBg = sug ? tabSuggestBg : tabContinueBg, offBg = sug ? tabContinueBg : tabSuggestBg;
-        onBg.setColor(focused ? 0xFFFFFFFF : 0x33FFFFFF);
-        on.setTextColor(focused ? 0xFF111114 : Color.WHITE);
-        offBg.setColor(Color.TRANSPARENT);
-        off.setTextColor(0xB3FFFFFF);
+        tabSuggestBg.setColor(focused ? 0xFFFFFFFF : 0x33FFFFFF);
+        tabSuggest.setTextColor(focused ? 0xFF111114 : Color.WHITE);
     }
 
     void setShelfMode(String mode) {
@@ -2458,13 +2455,12 @@ public class MainActivity extends Activity {
 
     /** The tab bar only appears when there are two things to switch between. */
     boolean tabsShown() {
-        return false;  // one carousel mixes everything; no Suggestions / Continue Watching tabs
+        return true; // Persistent Apps entry opens the full app library, like the tvOS home navigation.
     }
 
     /** Applies the profile's choices: hides the tab bar and picks the one remaining mode. */
     void applyTabs() {
         if (switcher == null) return;
-        if (!"suggest".equals(shelfMode)) setShelfMode("suggest");
         boolean show = tabsShown();
         if (!show && switcher.isFocused()) vpnButton.requestFocus();
         switcher.setVisibility(show ? View.VISIBLE : View.GONE);
@@ -3287,21 +3283,14 @@ public class MainActivity extends Activity {
         if (f == switcher) {
             switch (k) {
                 case KeyEvent.KEYCODE_DPAD_LEFT:
-                    if (down) {
-                        if (continueMode()) setShelfMode("suggest");
-                        else if (weatherShown()) weatherCard.requestFocus();
-                    }
+                    if (down && weatherShown() && weatherCard != null) weatherCard.requestFocus();
                     return true;
                 case KeyEvent.KEYCODE_DPAD_RIGHT:
-                    // Past the last tab, Right continues to the status row (VPN shortcut).
-                    if (down) {
-                        if (continueMode()) vpnButton.requestFocus();
-                        else setShelfMode("continue");
-                    }
+                    if (down && vpnButton != null) vpnButton.requestFocus();
                     return true;
                 case KeyEvent.KEYCODE_DPAD_CENTER:
                 case KeyEvent.KEYCODE_ENTER:
-                    if (!down) setShelfMode(continueMode() ? "suggest" : "continue");
+                    if (!down) enterFolder();
                     return true;
                 case KeyEvent.KEYCODE_DPAD_UP: if (down) vpnButton.requestFocus(); return true;
                 case KeyEvent.KEYCODE_DPAD_DOWN:
@@ -4007,7 +3996,17 @@ public class MainActivity extends Activity {
 
     /** Opens the overflow collection as a centered tvOS-style folder sheet. */
     void enterFolder() {
-        if (effectiveOtherApps.isEmpty() || appFolderOverlay != null) return;
+        if (appFolderOverlay != null) return;
+        final List<AppEntry> libraryApps = new ArrayList<>();
+        libraryApps.addAll(apps);
+        for (AppEntry extra : effectiveOtherApps) {
+            boolean exists = false;
+            for (AppEntry current : libraryApps) {
+                if (current.key != null && current.key.equals(extra.key)) { exists = true; break; }
+            }
+            if (!exists) libraryApps.add(extra);
+        }
+        if (libraryApps.isEmpty()) return;
         folderReturnFocus = getCurrentFocus();
         folderMode = true;
         setHeroShown(false);
@@ -4022,20 +4021,21 @@ public class MainActivity extends Activity {
 
         FrameLayout overlay = new FrameLayout(this);
         overlay.setFocusable(true);
-        overlay.setBackgroundColor(0x99060910);
+        overlay.setBackgroundColor(0xD9060910);
         overlay.setAlpha(0f);
         overlay.setOnClickListener(v -> exitFolder());
 
-        int panelW = Math.min(screenW - dp(64), dp(900));
-        int panelH = Math.min(screenH - dp(64), dp(650));
+        int panelW = Math.max(dp(320), screenW - dp(56));
+        int panelH = Math.max(dp(260), screenH - dp(48));
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(28), dp(22), dp(28), dp(22));
-        LiquidGlass folderGlass = new LiquidGlass(dp(28), 0xB81A1D26, glassSource,
-                screenW, screenH, unit).adaptive().darker(0x48);
-        folderGlass.lens = dp(8);
-        folderGlass.rimStrength = 1.18f;
-        panel.setBackground(folderGlass);
+        GradientDrawable librarySurface = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0xF2222731, 0xF0181C25});
+        librarySurface.setCornerRadius(dp(24));
+        librarySurface.setStroke(Math.max(1, dp(1)), 0x30FFFFFF);
+        panel.setBackground(librarySurface);
         panel.setElevation(dp(28));
         panel.setOnClickListener(v -> { /* consume clicks inside the folder surface */ });
         FrameLayout.LayoutParams panelLp = new FrameLayout.LayoutParams(panelW, panelH, Gravity.CENTER);
@@ -4045,10 +4045,10 @@ public class MainActivity extends Activity {
         header.setOrientation(LinearLayout.VERTICAL);
         header.setPadding(dp(4), dp(0), dp(4), dp(18));
         TextView title = text(27, Ui.font(this, "display"), 1f);
-        title.setText(I18n.s(this, "Other Apps", "Diğer Uygulamalar"));
+        title.setText(I18n.s(this, "Apps", "Uygulamalar"));
         title.setSingleLine(true);
         TextView subtitle = text(13, Ui.font(this, "regular"), 0.62f);
-        subtitle.setText(I18n.count(this, effectiveOtherApps.size(), "app", "apps",
+        subtitle.setText(I18n.count(this, libraryApps.size(), "app", "apps",
                 "uygulama", "uygulama", "приложение", "приложения", "приложений")
                 + "  ·  " + I18n.s(this, "Press Back to close", "Kapatmak için Geri"));
         subtitle.setSingleLine(true);
@@ -4069,7 +4069,7 @@ public class MainActivity extends Activity {
         grid.setClipToPadding(false);
         int columns = 5;
         LinearLayout gridRow = null;
-        for (int i = 0; i < effectiveOtherApps.size(); i++) {
+        for (int i = 0; i < libraryApps.size(); i++) {
             if (i % columns == 0) {
                 gridRow = new LinearLayout(this);
                 gridRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -4085,7 +4085,7 @@ public class MainActivity extends Activity {
                     grid.addView(gridRow);
                 }
             }
-            final AppEntry app = effectiveOtherApps.get(i);
+            final AppEntry app = libraryApps.get(i);
             LinearLayout item = new LinearLayout(this);
             item.setOrientation(LinearLayout.VERTICAL);
             item.setGravity(Gravity.CENTER);
