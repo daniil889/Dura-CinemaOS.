@@ -45,7 +45,7 @@ New-Item -ItemType Directory -Force -Path "build\gen", "build\classes", "build\d
 & "$BT\aapt2.exe" compile --dir res -o build\res.zip
 if ($LASTEXITCODE -ne 0) { throw "aapt2 compile failed" }
 
-& "$BT\aapt2.exe" link -o build\unsigned.apk -I "$JAR" --manifest AndroidManifest.xml `
+& "$BT\aapt2.exe" link -o build\unsigned.apk -I "$JAR" --manifest AndroidManifest.xml --custom-package com.techgenius.tvoslauncher `
     --java build\gen --min-sdk-version 23 --target-sdk-version 34 `
     --version-code $versionCode --version-name $versionName build\res.zip
 if ($LASTEXITCODE -ne 0) { throw "aapt2 link failed" }
