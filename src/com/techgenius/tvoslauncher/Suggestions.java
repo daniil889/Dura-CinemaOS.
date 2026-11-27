@@ -447,6 +447,110 @@ final class Suggestions {
         return out;
     }
 
+
+    /**
+     * Resolve Russian streaming brands from JustWatch's current package directory, then fetch
+     * their regional catalogue. This avoids hard-coding undocumented provider IDs or package codes.
+     * The endpoint is unofficial/public and may change; no user API key is required.
+     */
+    static List<Item> fetchJustWatchForPackage(Context c, String appPackage, int limit) throws Exception {
+        String pkg = appPackage == null ? "" : appPackage.toLowerCase(java.util.Locale.ROOT);
+        String[] aliases;
+        if (pkg.contains("okko")) aliases = new String[]{"okko"};
+        else if (pkg.contains("wink")) aliases = new String[]{"wink"};
+        else if (pkg.contains("ivi")) aliases = new String[]{"ivi", "иви"};
+        else if (pkg.contains("start")) aliases = new String[]{"start"};
+        else if (pkg.contains("premier")) aliases = new String[]{"premier", "премьер"};
+        else return new ArrayList<>();
+
+        String country = StreamingCatalog.region(c);
+        String packageQuery = "query Packages($country: Country!, $platform: Platform!) {"
+                + " packages(country: $country, platform: $platform) {"
+                + " packageId clearName technicalName shortName } }";
+        JSONObject packageVars = new JSONObject().put("country", country).put("platform", "WEB");
+        JSONObject packageBody = new JSONObject().put("query", packageQuery).put("variables", packageVars);
+        JSONObject packageResponse = post("https://apis.justwatch.com/graphql", packageBody.toString());
+        JSONArray packages = packageResponse.optJSONObject("data") == null ? null
+                : packageResponse.getJSONObject("data").optJSONArray("packages");
+        String shortName = "", technicalName = "";
+        for (int i = 0; packages != null && i < packages.length(); i++) {
+            JSONObject candidate = packages.optJSONObject(i);
+            if (candidate == null) continue;
+            String clear = candidate.optString("clearName", "").toLowerCase(java.util.Locale.ROOT);
+            String tech = candidate.optString("technicalName", "").toLowerCase(java.util.Locale.ROOT);
+            String shortCode = candidate.optString("shortName", "").toLowerCase(java.util.Locale.ROOT);
+            for (String alias : aliases) {
+                if (clear.equals(alias) || tech.equals(alias) || shortCode.equals(alias)
+                        || clear.startsWith(alias + " ") || tech.startsWith(alias + "_")) {
+                    shortName = candidate.optString("shortName", "");
+                    technicalName = candidate.optString("technicalName", "");
+                    break;
+                }
+            }
+            if (!shortName.isEmpty()) break;
+        }
+        if (shortName.isEmpty()) return new ArrayList<>();
+
+        String typeSetting = types(c);
+        List<String> kinds = typeSetting.equals("both") ? Arrays.asList("tv", "movie")
+                : Arrays.asList(typeSetting);
+        String language = I18n.getLang(c);
+        if (language == null || !language.matches("[a-zA-Z]{2}")) language = "ru";
+        List<Item> out = new ArrayList<>();
+        for (String kind : kinds) {
+            JSONObject filter = new JSONObject()
+                    .put("packages", new JSONArray().put(shortName))
+                    .put("objectTypes", new JSONArray().put(kind.equals("tv") ? "SHOW" : "MOVIE"))
+                    .put("monetizationTypes", new JSONArray().put("FLATRATE").put("FREE").put("ADS"));
+            JSONObject vars = new JSONObject().put("country", country).put("language", language)
+                    .put("first", Math.min(POOL, Math.max(1, limit))).put("filter", filter);
+            JSONObject body = new JSONObject().put("query", JW_QUERY).put("variables", vars);
+            JSONObject response = post("https://apis.justwatch.com/graphql", body.toString());
+            JSONObject data = response.optJSONObject("data");
+            JSONObject popular = data == null ? null : data.optJSONObject("popularTitles");
+            JSONArray edges = popular == null ? null : popular.optJSONArray("edges");
+            for (int i = 0; edges != null && i < edges.length() && out.size() < limit; i++) {
+                JSONObject node = edges.optJSONObject(i);
+                if (node == null) continue;
+                JSONObject content = node.optJSONObject("content");
+                if (content == null) continue;
+                JSONArray backdrops = content.optJSONArray("backdrops");
+                if (backdrops == null || backdrops.length() == 0) continue;
+                JSONObject firstBackdrop = backdrops.optJSONObject(0);
+                if (firstBackdrop == null) continue;
+                String backdrop = firstBackdrop.optString("backdropUrl", "");
+                if (backdrop.isEmpty()) continue;
+                Item item = new Item();
+                item.id = Math.abs(node.optString("id", "").hashCode());
+                item.providerId = 0; // Dynamic provider; opened by app package below.
+                item.type = kind;
+                item.pkg = appPackage;
+                item.key = "justwatch:" + shortName + ":" + node.optString("id", "");
+                item.title = content.optString("title", "");
+                item.overview = content.optString("shortDescription", "");
+                item.backdrop = "https://images.justwatch.com" + backdrop
+                        .replace("{profile}", "s1440").replace("{format}", "jpg");
+                item.logo = "";
+                int year = content.optInt("originalReleaseYear", 0);
+                item.year = year > 0 ? String.valueOf(year) : "";
+                JSONObject scoring = content.optJSONObject("scoring");
+                item.rating = scoring == null ? 0d : scoring.optDouble("imdbScore", 0d);
+                item.genres = jwGenres(content.optJSONArray("genres"));
+                JSONArray offers = node.optJSONArray("offers");
+                for (int k = 0; offers != null && k < offers.length(); k++) {
+                    JSONObject offer = offers.optJSONObject(k);
+                    JSONObject pack = offer == null ? null : offer.optJSONObject("package");
+                    if (pack != null && technicalName.equals(pack.optString("technicalName", ""))) {
+                        item.link = offer.optString("standardWebURL", "");
+                        break;
+                    }
+                }
+                if (!item.title.isEmpty()) out.add(item);
+            }
+        }
+        return out;
+    }
+
     /**
      * Fetches popular & recently released movies and TV series for one or more countries
      * (used by the Home Dashboard Latest Releases widget).
@@ -838,6 +942,24 @@ final class Suggestions {
      */
     static void open(Context c, Item it) {
         Provider p = it.provider(c);
+        if (p == null && it.pkg != null && !it.pkg.isEmpty()) {
+            String targetPackage = it.pkg;
+            if (!installed(c, targetPackage)) {
+                start(c, new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + targetPackage)));
+                return;
+            }
+            if (it.link != null && !it.link.isEmpty()) {
+                Intent deepLink = view(it.link, targetPackage);
+                if (deepLink.resolveActivity(c.getPackageManager()) != null && start(c, deepLink)) return;
+            }
+            Intent search = new Intent(Intent.ACTION_SEARCH).setPackage(targetPackage)
+                    .putExtra(SearchManager.QUERY, it.title == null ? "" : it.title);
+            if (search.resolveActivity(c.getPackageManager()) != null && start(c, search)) return;
+            Intent launch = c.getPackageManager().getLeanbackLaunchIntentForPackage(targetPackage);
+            if (launch == null) launch = c.getPackageManager().getLaunchIntentForPackage(targetPackage);
+            if (launch != null) start(c, launch);
+            return;
+        }
         if (p == null) return;
         if (!installed(c, p.pkg)) {
             start(c, new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + p.pkg)));

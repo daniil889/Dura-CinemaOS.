@@ -79,6 +79,10 @@ final class StreamingCatalog {
         if (StreamingPlatformRegistry.isKinopoisk(packageName, "")) {
             return cachedOrFetch(c, packageName, () -> fetchKinopoisk(c, packageName), limit);
         }
+        if (StreamingPlatformRegistry.isRussianStreamingService(packageName, "")) {
+            return cachedOrFetch(c, packageName,
+                    () -> Suggestions.fetchJustWatchForPackage(c, packageName, limit), limit);
+        }
         Suggestions.Provider provider = providerForPackage(packageName);
         if (provider != null) {
             return cachedOrFetch(c, packageName, () -> {
