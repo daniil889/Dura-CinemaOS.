@@ -44,9 +44,9 @@ final class StreamingPlatformRegistry {
     static boolean isRussianStreamingService(String packageName, String appLabel) {
         String pkg = packageName == null ? "" : packageName.toLowerCase(Locale.ROOT);
         String label = appLabel == null ? "" : appLabel.toLowerCase(Locale.ROOT).trim();
-        return pkg.contains("okko") || label.contains("okko")
-                || pkg.contains("wink") || label.equals("wink")
-                || pkg.contains("ivi") || label.equals("ivi") || label.contains("иви")
+        return pkg.contains("okko") || pkg.startsWith("ru.more.play") || label.contains("okko")
+                || pkg.contains("wink") || pkg.equals("ru.rt.video.app.tv") || label.equals("wink")
+                || pkg.startsWith("ru.ivi.") || pkg.equals("ru.ivi.client") || label.equals("ivi") || label.contains("иви")
                 || pkg.contains("start") || label.equals("start") || label.equals("старт")
                 || pkg.contains("premier") || label.contains("premier") || label.contains("премьер");
     }
