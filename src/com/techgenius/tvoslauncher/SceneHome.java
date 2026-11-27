@@ -136,6 +136,7 @@ final class SceneHome {
         String backdropUrl;
         Suggestions.Item sourceItem;
         boolean removable;
+        boolean catalog;
     }
 
     SceneHome(MainActivity host) {
@@ -923,7 +924,8 @@ final class SceneHome {
                 hideShelf();
                 return;
             }
-            if (!host.cwEnabled()) {
+            if (!host.cwEnabled()
+                    && !StreamingPlatformRegistry.isSupported(a.pkg, a.label)) {
                 hideShelf();
                 if (HomeDashboard.isShowWhenNoCw(host)) {
                     showDashboard();
@@ -1129,6 +1131,27 @@ final class SceneHome {
             }
             out.add(c);
         }
+        if (out.isEmpty() && StreamingPlatformRegistry.isSupported(pkg, appName)) {
+            for (Suggestions.Item it : StreamingCatalog.fetchForPackage(host, pkg, MAX_SHELF_ITEMS)) {
+                if (it == null || it.title == null || it.title.trim().isEmpty()
+                        || it.backdrop == null || it.backdrop.trim().isEmpty()) continue;
+                WatchCardData card = new WatchCardData();
+                card.key = it.key;
+                card.pkg = pkg;
+                card.appName = appName;
+                card.title = it.title;
+                card.subtitle = it.overview == null || it.overview.trim().isEmpty()
+                        ? I18n.s(host, "Open in app", "Open in app") : it.overview;
+                card.progress = 0f;
+                card.backdropUrl = it.backdrop;
+                card.sourceItem = it;
+                card.removable = false;
+                card.catalog = true;
+                card.thumb = shelfThumbs.get(it.backdrop);
+                out.add(card);
+                if (out.size() >= MAX_SHELF_ITEMS) break;
+            }
+        }
         return out;
     }
 
@@ -1139,7 +1162,8 @@ final class SceneHome {
     }
 
     private void populateWatchRow(String pkg, List<WatchCardData> cards, int forcedFocusSlot) {
-        if (cards == null || cards.isEmpty() || !host.cwEnabled() || moreExpanded || moveDockIdx >= 0
+        boolean catalogOnly = cards != null && !cards.isEmpty() && cards.get(0).catalog;
+        if (cards == null || cards.isEmpty() || (!host.cwEnabled() && !catalogOnly) || moreExpanded || moveDockIdx >= 0
                 || pkg == null || !pkg.equals(activeShelfPkg)) {
             boolean wasFocusedInShelf = shelfCards.contains(host.getCurrentFocus());
             animateShelfOut();
@@ -1152,6 +1176,11 @@ final class SceneHome {
             return;
         }
         hideDashboard();
+        if (shelfHeader != null) {
+            shelfHeader.setText(catalogOnly
+                    ? I18n.s(host, "Explore", "Explore")
+                    : I18n.s(host, "Continue watching", "İzlemeye devam et"));
+        }
         boolean wasVisible = shelfBox.getVisibility() == View.VISIBLE && !shelfHiding;
         StringBuilder sb = new StringBuilder(pkg).append("::");
         for (int i = 0; i < cards.size() && i < MAX_SHELF_ITEMS; i++) {
@@ -1512,7 +1541,7 @@ final class SceneHome {
         final int classicIdx = Math.max(0, host.classicCwCards.indexOf(anchor));
         List<String> labels = new ArrayList<>();
         List<Runnable> actions = new ArrayList<>();
-        labels.add(I18n.s(host, "Resume", "Devam Et"));
+        labels.add(d.catalog ? I18n.s(host, "Open", "Open") : I18n.s(host, "Resume", "Devam Et"));
         actions.add(() -> openWatchCard(d));
         int destructive = -1;
         if (d.removable && d.key != null) {
