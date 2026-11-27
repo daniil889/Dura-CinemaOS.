@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
 
     static final PathInterpolator EASE = new PathInterpolator(0.2f, 0f, 0f, 1f);
     /** tvOS focused icon is ~1.2x its resting size (303x183 vs 248x148 px in Apple's reference). */
-    static final float FOCUS_SCALE = 1.22f;
+    static final float FOCUS_SCALE = 1.10f;
     /** Focus lift with a slight spring, like tvOS. */
     static final android.view.animation.OvershootInterpolator LIFT =
             new android.view.animation.OvershootInterpolator(1.3f);
@@ -3120,9 +3120,9 @@ public class MainActivity extends Activity {
                 heroLogo.setVisibility(View.GONE);
                 heroButton.setVisibility(View.GONE);
                 heroRemove.setVisibility(View.GONE);
-                // The wallpaper stays visible until updateAppTopShelfHero successfully decodes
-                // a real poster. A dead URI must never leave an empty/black hero.
-                updateAppTopShelfHero(programs.get(0), app);
+                // Keep the wallpaper until the first real poster has decoded. If the
+                // provider's highest-weight entry has a broken image, the next valid poster wins.
+                final boolean[] initialHeroSelected = {false};
                 int cardW = dp(132), cardH = dp(198), gap = dp(15);
                 for (int i = 0; i < programs.size(); i++) {
                     final AppPublishedProgram program = programs.get(i);
@@ -3130,12 +3130,15 @@ public class MainActivity extends Activity {
                     card.setOrientation(LinearLayout.VERTICAL);
                     card.setFocusable(true);
                     card.setFocusableInTouchMode(true);
-                    card.setClipChildren(false);
-                    card.setClipToPadding(false);
+                    card.setClipChildren(true);
+                    card.setClipToPadding(true);
+                    card.setCameraDistance(9000f * unit);
                     android.graphics.drawable.GradientDrawable cardBg = new android.graphics.drawable.GradientDrawable();
                     cardBg.setColor(0x26FFFFFF);
-                    cardBg.setCornerRadius(dp(9));
+                    cardBg.setCornerRadius(dp(11));
                     card.setBackground(cardBg);
+                    card.setClipToOutline(true);
+                    card.setElevation(dp(2));
                     card.setPadding(dp(3), dp(3), dp(3), dp(4));
                     ImageView poster = new ImageView(this);
                     poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -3158,6 +3161,14 @@ public class MainActivity extends Activity {
                     appTopShelfRow.addView(card, cardLp);
                     appTopShelfCards.add(card);
                     card.setOnFocusChangeListener((v, focused) -> {
+                        v.animate().withLayer()
+                                .scaleX(focused ? 1.055f : 1f)
+                                .scaleY(focused ? 1.055f : 1f)
+                                .translationZ(focused ? dp(10) : 0f)
+                                .setDuration(focused ? 190 : 150)
+                                .setInterpolator(focused ? LIFT : EASE).start();
+                        v.setElevation(focused ? dp(12) : dp(2));
+                        name.setTextColor(focused ? Color.WHITE : 0xD9FFFFFF);
                         if (focused && pkg.equals(appTopShelfPkg) && classicAppPreviewShown) {
                             updateAppTopShelfHero(program, app);
                             appTopShelfScroll.smoothScrollTo(Math.max(0, v.getLeft() - dp(30)), 0);
@@ -3167,9 +3178,14 @@ public class MainActivity extends Activity {
                     io.execute(() -> {
                         Bitmap bitmap = Suggestions.image(this, program.poster, "w342", 360);
                         if (bitmap != null) handler.post(() -> {
-                            if (generation == appTopShelfGeneration && poster.getParent() != null)
+                            if (generation == appTopShelfGeneration && poster.getParent() != null) {
                                 poster.setImageBitmap(bitmap);
-                            else bitmap.recycle();
+                                if (!initialHeroSelected[0] && classicAppPreviewShown
+                                        && pkg.equals(appTopShelfPkg)) {
+                                    initialHeroSelected[0] = true;
+                                    updateAppTopShelfHero(program, app);
+                                }
+                            } else bitmap.recycle();
                         });
                         else handler.post(() -> {
                             if (generation == appTopShelfGeneration && card.getParent() == appTopShelfRow) {
