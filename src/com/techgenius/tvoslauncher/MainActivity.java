@@ -6023,7 +6023,6 @@ public class MainActivity extends Activity {
 
     /** Shows the cached forecast (hidden when weather is off or nothing has loaded yet). */
     void updateWeather() {
-        if (weatherCard == null) return;
         Weather.Data d = Weather.enabled(this) ? Weather.cached(this) : null;
         if (sceneHome != null) {
             sceneHome.refreshWeatherBtn();
@@ -6040,6 +6039,7 @@ public class MainActivity extends Activity {
             boolean showShortcut = bigClock && SceneHome.isWeatherShortcutEnabled(this) && Weather.enabled(this);
             classicWeatherButton.setVisibility(showShortcut ? View.VISIBLE : View.GONE);
         }
+        if (weatherCard == null) return;
         boolean show = d != null && !Scenes.isScenesLook(this) && !bigClock;
         if (!show && weatherCard.isFocused()) focusTop();
         weatherCard.setVisibility(show ? View.VISIBLE : View.GONE);
