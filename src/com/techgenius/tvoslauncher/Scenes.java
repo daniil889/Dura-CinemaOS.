@@ -339,7 +339,9 @@ public final class Scenes {
     }
 
     public static String getLook(Context c) {
-        return prefs(c).getString("look_mode", LOOK_SCENES);
+        // The classic app-grid + Top Shelf layout is the closest match to the Apple TV home screen.
+        // Keep an explicitly saved user choice untouched; this only changes the first-run default.
+        return prefs(c).getString("look_mode", LOOK_CLASSIC);
     }
 
     public static boolean isScenesLook(Context c) {
