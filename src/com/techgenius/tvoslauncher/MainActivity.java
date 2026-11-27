@@ -1213,6 +1213,16 @@ public class MainActivity extends Activity {
         topSheen.setAlpha(0f);
         tile.addView(topSheen, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, cardH / 2, Gravity.TOP));
 
+        // A restrained glass rim completes the focused-card treatment without a heavy outline.
+        View focusRim = new View(this);
+        GradientDrawable rim = new GradientDrawable();
+        rim.setColor(Color.TRANSPARENT);
+        rim.setCornerRadius(cardRadius);
+        rim.setStroke(Math.max(1, dp(0.8f)), 0x66FFFFFF);
+        focusRim.setBackground(rim);
+        focusRim.setAlpha(0f);
+        tile.addView(focusRim, match());
+
         TextView label = text(15, Ui.font(this, "medium"), 0f);
         label.setText(a.label);
         label.setSingleLine(true);
@@ -1236,14 +1246,16 @@ public class MainActivity extends Activity {
                             .setInterpolator(LIFT).start();
                     label.animate().alpha(1f).translationY(cardH * (FOCUS_SCALE - 1f) / 2f).setDuration(160).start();
                 }
-                topSheen.setAlpha(1f);
+                topSheen.animate().alpha(1f).setDuration(150).start();
+                focusRim.animate().alpha(0.82f).setDuration(150).start();
                 onTileFocused(index);
             } else {
                 cell.setTranslationZ(0);
                 stopSway(v);
                 v.animate().scaleX(1f).scaleY(1f).setDuration(140).setInterpolator(EASE).start();
                 label.animate().alpha(0f).translationY(0).setDuration(120).start();
-                topSheen.setAlpha(0f);
+                topSheen.animate().alpha(0f).setDuration(120).start();
+                focusRim.animate().alpha(0f).setDuration(120).start();
             }
         });
         tile.setCameraDistance(9000 * unit);
