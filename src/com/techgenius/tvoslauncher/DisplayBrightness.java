@@ -86,6 +86,14 @@ final class DisplayBrightness {
                 Settings.System.putInt(context.getContentResolver(),
                         Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL);
                 Settings.System.putInt(context.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, value);
+                Activity activity = context instanceof Activity
+                        ? (Activity) context : MainActivity.activeInstance;
+                if (activity != null) {
+                    Window window = activity.getWindow();
+                    WindowManager.LayoutParams attrs = window.getAttributes();
+                    attrs.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+                    window.setAttributes(attrs);
+                }
                 return;
             } catch (SecurityException ignored) {
                 // Fall through to the app-window control below.
