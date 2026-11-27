@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.techgenius.tvoslauncher">
+    package="com.daniil889.duracinemaos">
 
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -15,20 +15,16 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
-    <!-- Search dictation: asked on screen the first time the mic is used. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <!-- Normal-level & TV listings permissions: lets us read apps' published Watch Next & Preview rows. -->
     <uses-permission android:name="com.android.providers.tv.permission.READ_EPG_DATA" />
     <uses-permission android:name="com.android.providers.tv.permission.WRITE_EPG_DATA" />
     <uses-permission android:name="android.permission.READ_TV_LISTINGS" />
-    <!-- Custom app icons, custom wallpapers, and automatic GitHub APK updates. -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
-    <!-- Granted once via ADB during setup so the launcher can self-repair Accessibility and handle Volume Hold Fix without keeping port 5555 open. -->
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
     <uses-permission android:name="android.permission.SET_VOLUME_KEY_LONG_PRESS_LISTENER" />
     <uses-permission android:name="android.permission.DUMP" />
@@ -42,8 +38,6 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
-        <!-- Search: the TV's voice input (e.g. Google's, which has no launcher icon), and the
-             browsers and apps that open streaming services' links. -->
         <intent>
             <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
         </intent>
@@ -66,7 +60,7 @@
         android:allowBackup="false">
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.techgenius.tvoslauncher.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:clearTaskOnLaunch="true"
@@ -88,14 +82,14 @@
             </intent-filter>
         </activity>
 
-        <receiver android:name=".SleepReceiver" android:exported="false" />
-        <receiver android:name=".AppUpdater$InstallStatusReceiver" android:exported="true">
+        <receiver android:name="com.techgenius.tvoslauncher.SleepReceiver" android:exported="false" />
+        <receiver android:name="com.techgenius.tvoslauncher.AppUpdater$InstallStatusReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
         <service
-            android:name=".PowerService"
+            android:name="com.techgenius.tvoslauncher.PowerService"
             android:directBootAware="true"
             android:exported="true"
             android:label="@string/power_service_label"
@@ -106,9 +100,8 @@
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/power_service" />
         </service>
 
-        <!-- Continue Watching: reads the media sessions apps publish while playing. -->
         <service
-            android:name=".MediaWatchService"
+            android:name="com.techgenius.tvoslauncher.MediaWatchService"
             android:exported="true"
             android:label="@string/media_service_label"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
@@ -117,9 +110,8 @@
             </intent-filter>
         </service>
 
-        <!-- Presentation mode (ported from pb-marketer-tv): full-screen player + boot start. -->
         <activity
-            android:name=".present.PresentationActivity"
+            android:name="com.techgenius.tvoslauncher.present.PresentationActivity"
             android:exported="false"
             android:launchMode="singleTask"
             android:excludeFromRecents="true"
@@ -127,7 +119,7 @@
             android:theme="@style/HomeTheme"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|smallestScreenSize|screenLayout|uiMode|density" />
         <receiver
-            android:name=".present.BootReceiver"
+            android:name="com.techgenius.tvoslauncher.present.BootReceiver"
             android:directBootAware="true"
             android:enabled="true"
             android:exported="true">
@@ -143,7 +135,7 @@
         </receiver>
 
         <activity
-            android:name=".SetupActivity"
+            android:name="com.techgenius.tvoslauncher.SetupActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:excludeFromRecents="true"
@@ -151,7 +143,7 @@
             android:windowSoftInputMode="adjustNothing"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|smallestScreenSize|screenLayout|uiMode|density" />
         <activity
-            android:name=".SettingsActivity"
+            android:name="com.techgenius.tvoslauncher.SettingsActivity"
             android:exported="true"
             android:excludeFromRecents="true"
             android:screenOrientation="landscape"
