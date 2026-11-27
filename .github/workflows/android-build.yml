@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# Push and pull_request can both fire for the same PR branch. Keep only the newest build.
+concurrency:
+  group: android-${{ github.event.pull_request.head.ref || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build APK (${{ matrix.os }})
