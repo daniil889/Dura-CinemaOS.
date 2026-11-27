@@ -2983,15 +2983,15 @@ public class MainActivity extends Activity {
         showClassicCwForPackage(a.pkg);
     }
 
-    /** Strict allow-list: generic apps, browsers, utilities and YouTube never get a Top Shelf. */
+    /** Strict allow-list: known streaming apps, including YouTube when it publishes TV content rows. */
     boolean isStreamingPlatform(AppEntry app) {
         if (app == null || app.pkg == null) return false;
         String pkg = app.pkg.toLowerCase(java.util.Locale.ROOT);
         String label = app.label == null ? "" : app.label.toLowerCase(java.util.Locale.ROOT);
-        if (pkg.contains("youtube") || label.contains("youtube")
-                || pkg.contains("browser") || label.contains("browser")) return false;
+        if (pkg.contains("browser") || label.contains("browser")) return false;
         // Exact service identifiers avoid accidental matches such as "activity" containing "ivi".
-        if (pkg.contains("kinopoisk") || label.contains("кинопоиск")
+        if (pkg.contains("youtube") || label.contains("youtube")
+                || pkg.contains("kinopoisk") || label.contains("кинопоиск")
                 || pkg.startsWith("ru.ivi") || label.equals("ivi") || label.startsWith("ivi ")
                 || pkg.contains("okko") || label.contains("okko")
                 || pkg.contains("zona") || label.contains("zona")
