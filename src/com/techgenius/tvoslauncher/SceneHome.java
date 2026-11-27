@@ -58,6 +58,7 @@ final class SceneHome {
     LinearLayout whoBar;
     LinearLayout weatherBtn;
     ImageView weatherIcon;
+    private int weatherIconCode = Integer.MIN_VALUE;
     LinearLayout searchBtn;
     ImageView searchIcon;
     LinearLayout moonBtn;
@@ -500,6 +501,26 @@ final class SceneHome {
         if (weatherBtn == null) return;
         boolean show = isWeatherShortcutEnabled(host) && Weather.enabled(host);
         weatherBtn.setVisibility(show ? View.VISIBLE : View.GONE);
+
+        Weather.Data data = show ? Weather.cached(host) : null;
+        int iconType = data == null ? -1 : Weather.iconType(data.code);
+        if (iconType == weatherIconCode) return;
+        weatherIconCode = iconType;
+        if (data == null) {
+            weatherIcon.setImageBitmap(Glyphs.get("cloud", dp(19), 0xFFF4F4F6));
+            return;
+        }
+
+        // Draw the same condition-aware weather glyph used by the forecast cards.
+        int size = dp(22);
+        Weather.WeatherIconView icon = new Weather.WeatherIconView(host);
+        icon.setType(iconType);
+        int spec = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY);
+        icon.measure(spec, spec);
+        icon.layout(0, 0, size, size);
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        icon.draw(new Canvas(bitmap));
+        weatherIcon.setImageBitmap(bitmap);
     }
 
     void refreshSearchBtn() {
