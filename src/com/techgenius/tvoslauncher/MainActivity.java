@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
 
     static final PathInterpolator EASE = new PathInterpolator(0.2f, 0f, 0f, 1f);
     /** tvOS focused icon is ~1.2x its resting size (303x183 vs 248x148 px in Apple's reference). */
-    static final float FOCUS_SCALE = 1.2f;
+    static final float FOCUS_SCALE = 1.22f;
     /** Focus lift with a slight spring, like tvOS. */
     static final android.view.animation.OvershootInterpolator LIFT =
             new android.view.animation.OvershootInterpolator(1.3f);
@@ -1196,6 +1196,8 @@ public class MainActivity extends Activity {
         tile.setBackground(bg);
         tile.setOutlineProvider(roundedOutline(new float[]{cardRadius}));
         tile.setClipToOutline(true);
+        tile.setElevation(dp(2));
+        tile.setCameraDistance(10500 * unit);
 
         ImageView iv = new ImageView(this);
         FrameLayout adaptiveIconLayers = null;
@@ -1288,7 +1290,8 @@ public class MainActivity extends Activity {
 
         tile.setOnFocusChangeListener((v, has) -> {
             if (has) {
-                cell.setTranslationZ(dp(10));
+                cell.setTranslationZ(dp(16));
+                tile.setElevation(dp(14));
                 if (moveIndex >= 0) {
                     // Rebuilt while moving: appear already lifted, or every step would "pop".
                     v.setScaleX(FOCUS_SCALE);
@@ -1311,21 +1314,21 @@ public class MainActivity extends Activity {
                     float parallaxX = Math.max(-1f, Math.min(1f, nx)) * dp(3.2f);
                     float parallaxY = Math.max(-1f, Math.min(1f, ny)) * dp(2.4f);
                     v.animate().withLayer().scaleX(FOCUS_SCALE).scaleY(FOCUS_SCALE)
-                            .rotationX(tiltX).rotationY(tiltY).translationZ(dp(9))
-                            .setDuration(185).setInterpolator(LIFT).start();
+                            .rotationX(tiltX).rotationY(tiltY).translationZ(dp(12))
+                            .setDuration(215).setInterpolator(LIFT).start();
                     // Artwork moves against the card's tilt. Adaptive icons get independent
                     // background/foreground offsets, matching the layered tvOS parallax language.
                     iconArtwork.animate().withLayer().scaleX(1.035f).scaleY(1.035f)
                             .translationX(-parallaxX * 0.32f).translationY(-parallaxY * 0.32f)
-                            .setDuration(190).setInterpolator(LIFT).start();
+                            .setDuration(215).setInterpolator(LIFT).start();
                     if (backParallax != null) {
                         backParallax.animate().withLayer().translationX(-parallaxX * 0.45f)
-                                .translationY(-parallaxY * 0.45f).setDuration(190)
+                                .translationY(-parallaxY * 0.45f).setDuration(215)
                                 .setInterpolator(LIFT).start();
                     }
                     if (frontParallax != null) {
                         frontParallax.animate().withLayer().translationX(parallaxX)
-                                .translationY(parallaxY).setDuration(190)
+                                .translationY(parallaxY).setDuration(215)
                                 .setInterpolator(LIFT).start();
                     }
                     label.animate().alpha(1f).translationY(cardH * (FOCUS_SCALE - 1f) / 2f)
@@ -1334,12 +1337,13 @@ public class MainActivity extends Activity {
                 cardGlass.setLit(true);
                 focusGlass.setVisibility(View.VISIBLE);
                 focusGlass.setAlpha(0f);
-                focusGlass.animate().alpha(0.28f).setDuration(190).setInterpolator(EASE).start();
+                focusGlass.animate().alpha(0.24f).setDuration(215).setInterpolator(EASE).start();
                 topSheen.animate().alpha(1f).setDuration(170).start();
                 focusRim.animate().alpha(0.82f).setDuration(170).start();
                 onTileFocused(index);
             } else {
                 cell.setTranslationZ(0);
+                tile.setElevation(dp(2));
                 stopSway(v);
                 cardGlass.setLit(false);
                 focusGlass.animate().alpha(0f).setDuration(130).setInterpolator(EASE)
