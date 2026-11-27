@@ -300,3 +300,11 @@ tvOS Launcher спрашивает на экране везде, где теле
 
 Все размеры относительны разрешению экрана (расчётная сетка 960×540), поэтому раскладка сохраняет
 пропорции на 720p, 1080p и 4K и перестраивается при изменении дисплея.
+
+
+## tvOS visual depth follow-up
+
+- Keep the classic app-grid + Top Shelf home as the first-run layout; it remains the closest match to the Apple TV home screen. The existing launcher also retains horizontal Continue Watching and recommendation rows.
+- Add true adaptive-icon layer separation where Android exposes background and foreground layers. On focus, the two layers move independently to create a restrained parallax effect; regular app banners keep a simpler counter-shift.
+- Add a short cinematic push-in to Top Shelf artwork transitions, paired with the existing directional crossfade. Motion stops between transitions to avoid continuous GPU work.
+- Control Center, multi-user profiles, the ambient/screensaver flow, and the two-panel glass settings are existing project features; this pass preserves them rather than creating duplicate implementations.

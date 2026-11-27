@@ -1198,16 +1198,55 @@ public class MainActivity extends Activity {
         tile.setClipToOutline(true);
 
         ImageView iv = new ImageView(this);
+        FrameLayout adaptiveIconLayers = null;
+        ImageView adaptiveBackLayer = null;
+        ImageView adaptiveFrontLayer = null;
         if (a.banner != null) {
             iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
             iv.setImageDrawable(a.banner);
             tile.addView(iv, match());
+        } else if (Build.VERSION.SDK_INT >= 26
+                && a.icon instanceof android.graphics.drawable.AdaptiveIconDrawable) {
+            // Keep Android's adaptive icon layers separate so focus can create real depth,
+            // rather than merely scaling a flattened 2D bitmap.
+            android.graphics.drawable.AdaptiveIconDrawable adaptive =
+                    (android.graphics.drawable.AdaptiveIconDrawable) a.icon;
+            adaptiveIconLayers = new FrameLayout(this);
+            adaptiveIconLayers.setClipChildren(true);
+            adaptiveIconLayers.setClipToPadding(true);
+            adaptiveIconLayers.setOutlineProvider(roundedOutline(new float[]{dp(18)}));
+            adaptiveIconLayers.setClipToOutline(true);
+
+            adaptiveBackLayer = new ImageView(this);
+            adaptiveBackLayer.setScaleType(ImageView.ScaleType.FIT_XY);
+            Drawable adaptiveBackground = adaptive.getBackground();
+            if (adaptiveBackground != null) {
+                Drawable.ConstantState state = adaptiveBackground.getConstantState();
+                adaptiveBackLayer.setImageDrawable(state != null
+                        ? state.newDrawable(getResources()).mutate() : adaptiveBackground.mutate());
+                adaptiveIconLayers.addView(adaptiveBackLayer, match());
+            }
+
+            adaptiveFrontLayer = new ImageView(this);
+            adaptiveFrontLayer.setScaleType(ImageView.ScaleType.FIT_XY);
+            Drawable adaptiveForeground = adaptive.getForeground();
+            if (adaptiveForeground != null) {
+                Drawable.ConstantState state = adaptiveForeground.getConstantState();
+                adaptiveFrontLayer.setImageDrawable(state != null
+                        ? state.newDrawable(getResources()).mutate() : adaptiveForeground.mutate());
+                adaptiveIconLayers.addView(adaptiveFrontLayer, match());
+            }
+            int s = cardH * 55 / 100;
+            tile.addView(adaptiveIconLayers, new FrameLayout.LayoutParams(s, s, Gravity.CENTER));
         } else {
             iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
             iv.setImageDrawable(a.icon);
             int s = cardH * 55 / 100;
             tile.addView(iv, new FrameLayout.LayoutParams(s, s, Gravity.CENTER));
         }
+        final View iconArtwork = adaptiveIconLayers != null ? adaptiveIconLayers : iv;
+        final ImageView backParallax = adaptiveBackLayer;
+        final ImageView frontParallax = adaptiveFrontLayer;
 
         // tvOS focus has no outline ring: a soft top sheen on the hardware-cached tile.
         View topSheen = new View(this);
@@ -1269,9 +1308,26 @@ public class MainActivity extends Activity {
                             / Math.max(1f, screenH * 0.5f);
                     float tiltY = -Math.max(-1f, Math.min(1f, nx)) * 1.55f;
                     float tiltX = Math.max(-1f, Math.min(1f, ny)) * 0.85f;
+                    float parallaxX = Math.max(-1f, Math.min(1f, nx)) * dp(3.2f);
+                    float parallaxY = Math.max(-1f, Math.min(1f, ny)) * dp(2.4f);
                     v.animate().scaleX(FOCUS_SCALE).scaleY(FOCUS_SCALE)
                             .rotationX(tiltX).rotationY(tiltY).translationZ(dp(9))
                             .setDuration(230).setInterpolator(LIFT).start();
+                    // Artwork moves against the card's tilt. Adaptive icons get independent
+                    // background/foreground offsets, matching the layered tvOS parallax language.
+                    iconArtwork.animate().scaleX(1.045f).scaleY(1.045f)
+                            .translationX(-parallaxX * 0.32f).translationY(-parallaxY * 0.32f)
+                            .setDuration(260).setInterpolator(LIFT).start();
+                    if (backParallax != null) {
+                        backParallax.animate().translationX(-parallaxX * 0.45f)
+                                .translationY(-parallaxY * 0.45f).setDuration(260)
+                                .setInterpolator(LIFT).start();
+                    }
+                    if (frontParallax != null) {
+                        frontParallax.animate().translationX(parallaxX)
+                                .translationY(parallaxY).setDuration(260)
+                                .setInterpolator(LIFT).start();
+                    }
                     label.animate().alpha(1f).translationY(cardH * (FOCUS_SCALE - 1f) / 2f)
                             .setDuration(170).setInterpolator(LIFT).start();
                 }
@@ -1292,6 +1348,16 @@ public class MainActivity extends Activity {
                         }).start();
                 v.animate().scaleX(1f).scaleY(1f).rotationX(0f).rotationY(0f)
                         .translationZ(0f).setDuration(170).setInterpolator(EASE).start();
+                iconArtwork.animate().scaleX(1f).scaleY(1f).translationX(0f).translationY(0f)
+                        .setDuration(180).setInterpolator(EASE).start();
+                if (backParallax != null) {
+                    backParallax.animate().translationX(0f).translationY(0f)
+                            .setDuration(180).setInterpolator(EASE).start();
+                }
+                if (frontParallax != null) {
+                    frontParallax.animate().translationX(0f).translationY(0f)
+                            .setDuration(180).setInterpolator(EASE).start();
+                }
                 label.animate().alpha(0f).translationY(0).setDuration(130).start();
                 topSheen.animate().alpha(0f).setDuration(130).start();
                 focusRim.animate().alpha(0f).setDuration(130).start();
@@ -2704,16 +2770,28 @@ public class MainActivity extends Activity {
         float target = heroShown ? 1f : 0f;
         if (dir == 0 || !heroShown) {
             next.setTranslationX(0);
+            next.setScaleX(1.035f);
+            next.setScaleY(1.035f);
             next.setAlpha(target);
             old.setAlpha(0f);
             return;
         }
+        // Top Shelf artwork has a restrained cinematic push-in as it enters, with the
+        // outgoing image drifting in the opposite direction. No perpetual animation at idle.
         next.setTranslationX(screenW * 0.12f * dir);
+        next.setScaleX(1.075f);
+        next.setScaleY(1.075f);
         next.setAlpha(0f);
-        next.animate().translationX(0).alpha(1f).setDuration(650).setInterpolator(EASE).start();
+        next.animate().translationX(0).scaleX(1.035f).scaleY(1.035f).alpha(1f)
+                .setDuration(680).setInterpolator(EASE).start();
         old.animate().cancel();
-        old.animate().translationX(-screenW * 0.06f * dir).alpha(0f).setDuration(650)
-                .setInterpolator(EASE).withEndAction(() -> old.setTranslationX(0)).start();
+        old.animate().translationX(-screenW * 0.06f * dir).scaleX(1.06f).scaleY(1.06f)
+                .alpha(0f).setDuration(680).setInterpolator(EASE)
+                .withEndAction(() -> {
+                    old.setTranslationX(0);
+                    old.setScaleX(1.035f);
+                    old.setScaleY(1.035f);
+                }).start();
     }
 
     /** Carousel focused: the dock slides away and the artwork takes the whole screen (tvOS Top Shelf). */
