@@ -6,7 +6,7 @@ if (-not $env:JAVA_HOME) {
         "C:\Program Files\Java\jdk-17",
         "C:\Program Files\Java\jdk-21",
         "C:\Program Files\Eclipse Adoptium\jdk-17*",
-        "C:\Program Files\Microsoft\jdk-17*",
+        "C:\Program Files\Microsoft\jdk-17*"
     )
     foreach ($cand in $jdkCandidates) {
         $found = Get-Item $cand -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -27,6 +27,17 @@ $JAR = "$SDK\platforms\android-34\android.jar"
 $D8JAR = "$SDK\build-tools\36.0.0\lib\d8.jar"
 if (-not (Test-Path $D8JAR)) { $D8JAR = "$SDK\build-tools\35.0.0\lib\d8.jar" }
 if (-not (Test-Path $D8JAR)) { $D8JAR = "$BT\lib\d8.jar" }
+
+$requiredTools = @("$BT\aapt2.exe", "$BT\zipalign.exe", "$BT\apksigner.bat", "$JAR", "$D8JAR")
+foreach ($tool in $requiredTools) {
+    if (-not (Test-Path $tool)) { throw "Missing required Android SDK tool: $tool. Install build-tools 34.0.0 and 35.0.0/36.0.0, plus platform android-34, or set ANDROID_HOME." }
+}
+foreach ($tool in @("javac", "jar", "keytool", "java")) {
+    if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "$tool not found. Install JDK 17+ and set JAVA_HOME." }
+}
+
+$versionCode = if ($env:VERSION_CODE) { $env:VERSION_CODE } else { "17" }
+$versionName = if ($env:VERSION_NAME) { $env:VERSION_NAME } else { "2.2.5" }
 
 if (Test-Path "build") { Get-ChildItem -Path "build" | Remove-Item -Recurse -Force }
 New-Item -ItemType Directory -Force -Path "build\gen", "build\classes", "build\dex" | Out-Null
@@ -81,6 +92,7 @@ if ($LASTEXITCODE -ne 0) { throw "zipalign failed" }
 
 $KS = "debug.keystore"
 if (-not (Test-Path $KS)) {
+    if (-not $env:RELEASE_KEYSTORE -and -not (Test-Path $KS)) {
     & keytool -genkeypair -keystore $KS -storepass android -keypass android -alias debug `
         -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=tvOS Launcher debug" | Out-Null
 }
