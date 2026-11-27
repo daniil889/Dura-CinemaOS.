@@ -693,7 +693,7 @@ public class MainActivity extends Activity {
         root.setBackground(null);
 
         // One ambient wallpaper for every app. It is drawn tiny and upscaled, so it is already
-        // soft; a slow drift keeps it alive without a per-frame blur on this weak GPU.
+        // soft. Keep it static while idle to avoid wasting frames on this weak GPU.
         wallView = new ImageView(this);
         wallView.setScaleType(ImageView.ScaleType.CENTER_CROP);
         wallStyle = Profiles.homePrefs(this).getString("wallpaper", "photo:tessellated-pavement.jpg");
