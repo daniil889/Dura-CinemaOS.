@@ -79,7 +79,31 @@ final class StreamingCatalog {
         if (StreamingPlatformRegistry.isKinopoisk(packageName, "")) {
             return cachedOrFetch(c, packageName, () -> fetchKinopoisk(c, packageName), limit);
         }
+        Suggestions.Provider provider = providerForPackage(packageName);
+        if (provider != null) {
+            return cachedOrFetch(c, packageName, () -> {
+                List<Suggestions.Item> items = Suggestions.fetchJustWatchForProvider(c, provider, limit);
+                for (Suggestions.Item item : items) {
+                    item.pkg = packageName;
+                    if (item.key == null || item.key.isEmpty()) item.key = packageName + "|" + item.id;
+                }
+                return items;
+            }, limit);
+        }
         return new ArrayList<>();
+    }
+
+    private static Suggestions.Provider providerForPackage(String packageName) {
+        String pkg = packageName == null ? "" : packageName.toLowerCase(Locale.ROOT);
+        for (Suggestions.Provider provider : Suggestions.PROVIDERS) {
+            if (provider.pkg.equals(pkg)) return provider;
+        }
+        if ("com.amazon.avod.thirdpartyclient".equals(pkg)) {
+            for (Suggestions.Provider provider : Suggestions.PROVIDERS) {
+                if ("com.amazon.amazonvideo.livingroom".equals(provider.pkg)) return provider;
+            }
+        }
+        return null;
     }
 
     private interface Loader {
