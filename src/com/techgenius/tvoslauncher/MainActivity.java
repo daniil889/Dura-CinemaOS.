@@ -4530,7 +4530,12 @@ public class MainActivity extends Activity {
                     closeProfilePicker();
                     showSearch(null);
                 },
-                () -> refreshAll());
+                () -> {
+                    dropPicker();
+                    pickerLayer = null;
+                    popoverReturn = null;
+                    refreshAll();
+                });
 
         FrameLayout.LayoutParams plp = (FrameLayout.LayoutParams) panel.getLayoutParams();
         plp.gravity = Gravity.TOP | Gravity.END;
