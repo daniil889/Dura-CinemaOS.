@@ -1324,7 +1324,7 @@ public class MainActivity extends Activity {
                     float parallaxX = Math.max(-1f, Math.min(1f, nx)) * dp(3.2f);
                     float parallaxY = Math.max(-1f, Math.min(1f, ny)) * dp(2.4f);
                     v.animate().withLayer().scaleX(FOCUS_SCALE).scaleY(FOCUS_SCALE)
-                            .rotationX(tiltX).rotationY(tiltY).translationZ(dp(12))
+                            .rotationX(0f).rotationY(0f).translationZ(dp(12))
                             .setDuration(215).setInterpolator(LIFT).start();
                     // Artwork moves against the card's tilt. Adaptive icons get independent
                     // background/foreground offsets, matching the layered tvOS parallax language.
@@ -2996,15 +2996,26 @@ public class MainActivity extends Activity {
         if (app == null || app.pkg == null) return false;
         String pkg = app.pkg.toLowerCase(java.util.Locale.ROOT);
         String label = app.label == null ? "" : app.label.toLowerCase(java.util.Locale.ROOT);
-        String identity = pkg + " " + label;
-        if (identity.contains("youtube") || identity.contains("browser")) return false;
-        String[] known = {
-                "kinopoisk", "ivi", "okko", "zona", "rutube",
-                "netflix", "primevideo", "amazonvideo", "disneyplus", "disney+",
-                "appletv", "apple tv", "max", "hulu", "paramount", "peacock",
-                "crunchyroll", "hotstar", "zee5", "sonyliv"
-        };
-        for (String token : known) if (identity.contains(token)) return true;
+        if (pkg.contains("youtube") || label.contains("youtube")
+                || pkg.contains("browser") || label.contains("browser")) return false;
+        // Exact service identifiers avoid accidental matches such as "activity" containing "ivi".
+        if (pkg.contains("kinopoisk") || label.contains("кинопоиск")
+                || pkg.startsWith("ru.ivi") || label.equals("ivi") || label.startsWith("ivi ")
+                || pkg.contains("okko") || label.contains("okko")
+                || pkg.contains("zona") || label.contains("zona")
+                || pkg.contains("rutube") || label.contains("rutube")
+                || pkg.contains("netflix") || label.contains("netflix")
+                || pkg.contains("amazonvideo") || pkg.contains("primevideo") || label.contains("prime video")
+                || pkg.contains("disney") || label.contains("disney+")
+                || pkg.contains("appletv") || label.equals("apple tv")
+                || pkg.contains("hbomax") || label.equals("max") || label.startsWith("max ")
+                || pkg.contains("hulu") || label.equals("hulu")
+                || pkg.contains("paramount") || label.contains("paramount")
+                || pkg.contains("peacock") || label.contains("peacock")
+                || pkg.contains("crunchyroll") || label.contains("crunchyroll")
+                || pkg.contains("hotstar") || label.contains("hotstar")
+                || pkg.contains("zee5") || label.contains("zee5")
+                || pkg.contains("sonyliv") || label.contains("sonyliv")) return true;
         return false;
     }
 
@@ -3113,20 +3124,12 @@ public class MainActivity extends Activity {
                         || !pkg.equals(shown.get(focusedIndex).pkg)) return;
                 if (programs.isEmpty()) return;
                 hideClassicDashboard();
-                if (wallView != null) {
-                    wallView.animate().cancel();
-                    wallView.animate().alpha(0f).setDuration(220).withEndAction(() -> {
-                        if (classicAppPreviewShown && pkg.equals(appTopShelfPkg)) wallView.setVisibility(View.GONE);
-                    }).start();
-                }
                 heroProvider.setVisibility(View.GONE);
                 heroLogo.setVisibility(View.GONE);
                 heroButton.setVisibility(View.GONE);
                 heroRemove.setVisibility(View.GONE);
-                heroFront.setVisibility(View.VISIBLE);
-                heroFront.setAlpha(1f);
-                heroInfo.setVisibility(View.VISIBLE);
-                heroInfo.setAlpha(1f);
+                // The wallpaper stays visible until updateAppTopShelfHero successfully decodes
+                // a real poster. A dead URI must never leave an empty/black hero.
                 updateAppTopShelfHero(programs.get(0), app);
                 int cardW = dp(132), cardH = dp(198), gap = dp(15);
                 for (int i = 0; i < programs.size(); i++) {
@@ -3179,10 +3182,8 @@ public class MainActivity extends Activity {
                     });
                 }
                 appTopShelfScroll.scrollTo(0, 0);
-                appTopShelfBox.setVisibility(View.VISIBLE);
+                appTopShelfBox.setVisibility(View.GONE);
                 appTopShelfBox.setAlpha(0f);
-                appTopShelfBox.setTranslationY(dp(10));
-                appTopShelfBox.animate().alpha(1f).translationY(0f).setDuration(260).setInterpolator(EASE).start();
             });
         });
     }
@@ -3211,6 +3212,21 @@ public class MainActivity extends Activity {
                 heroFront.setImageBitmap(bakeScrims(image));
                 heroFront.setVisibility(View.VISIBLE);
                 heroFront.setAlpha(1f);
+                heroInfo.setVisibility(View.VISIBLE);
+                heroInfo.setAlpha(1f);
+                if (wallView != null) {
+                    wallView.animate().cancel();
+                    wallView.animate().alpha(0f).setDuration(220).withEndAction(() -> {
+                        if (classicAppPreviewShown && pkg.equals(appTopShelfPkg)) wallView.setVisibility(View.GONE);
+                    }).start();
+                }
+                if (appTopShelfBox.getVisibility() != View.VISIBLE) {
+                    appTopShelfBox.setVisibility(View.VISIBLE);
+                    appTopShelfBox.setAlpha(0f);
+                    appTopShelfBox.setTranslationY(dp(10));
+                    appTopShelfBox.animate().alpha(1f).translationY(0f)
+                            .setDuration(260).setInterpolator(EASE).start();
+                }
             });
         });
     }
