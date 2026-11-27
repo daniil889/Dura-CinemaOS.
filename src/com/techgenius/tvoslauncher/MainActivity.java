@@ -836,6 +836,30 @@ public class MainActivity extends Activity {
         timeChip.addView(time);
         clockBox.addView(timeChip, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, btn));
 
+        // VPN shortcut: opens Android VPN settings and reflects the active default VPN transport.
+        vpnButton = new ImageView(this);
+        vpnButton.setScaleType(ImageView.ScaleType.CENTER);
+        vpnButton.setImageBitmap(Glyphs.get("shield", dp(20), Color.WHITE));
+        LiquidGlass vpnGlass = new LiquidGlass(btn / 2f, 0x1F000000, glassSource, screenW, screenH, unit).adaptive();
+        vpnGlass.lens = dp(4);
+        vpnButton.setBackground(vpnGlass);
+        vpnButton.setFocusable(true);
+        vpnButton.setClickable(true);
+        LinearLayout.LayoutParams vpnLp = new LinearLayout.LayoutParams(btn, btn);
+        vpnLp.leftMargin = dp(12);
+        clockBox.addView(vpnButton, vpnLp);
+        GradientDrawable vpnLit = new GradientDrawable();
+        vpnLit.setShape(GradientDrawable.OVAL);
+        vpnLit.setColor(Color.WHITE);
+        vpnButton.setOnFocusChangeListener((v, has) -> {
+            vpnButton.setBackground(has ? vpnLit : vpnGlass);
+            vpnButton.setImageBitmap(Glyphs.get("shield", dp(20), has ? 0xFF111114 : (vpnConnected ? 0xFF30D158 : Color.WHITE)));
+            v.animate().scaleX(has ? 1.12f : 1f).scaleY(has ? 1.12f : 1f).setDuration(200).setInterpolator(LIFT).start();
+            if (has) onClassicNonAppFocused();
+        });
+        vpnButton.setOnClickListener(v -> openVpnSettings());
+        vpnButton.setContentDescription(I18n.t(this, "VPN settings", "VPN settings"));
+
         // Classic Big Clock Weather Shortcut button in top-right status row (when Big Clock is enabled on Classic look)
         classicWeatherButton = new ImageView(this);
         classicWeatherButton.setScaleType(ImageView.ScaleType.CENTER);
@@ -2373,6 +2397,8 @@ public class MainActivity extends Activity {
     void focusTop() {
         if (switcher != null && switcher.getVisibility() == View.VISIBLE) {
             switcher.requestFocus();
+        } else if (vpnButton != null) {
+            vpnButton.requestFocus();
         } else if (classicWeatherButton != null && classicWeatherButton.getVisibility() == View.VISIBLE) {
             classicWeatherButton.requestFocus();
         } else {
@@ -2664,7 +2690,7 @@ public class MainActivity extends Activity {
     /** Carousel focused: the dock slides away and the artwork takes the whole screen (tvOS Top Shelf). */
     boolean heroRequested;
 
-    ImageView avatarView, ccButton, refreshButton, searchButton, classicWeatherButton, netIcon;
+    ImageView avatarView, ccButton, refreshButton, searchButton, classicWeatherButton, netIcon, vpnButton;
     View timeChipView;
     TextClock statusClock;
 
@@ -3087,9 +3113,9 @@ public class MainActivity extends Activity {
                     }
                     return true;
                 case KeyEvent.KEYCODE_DPAD_RIGHT:
-                    // Past the last tab, Right continues to the status row (Control Center).
+                    // Past the last tab, Right continues to the status row (VPN shortcut).
                     if (down) {
-                        if (continueMode()) ccButton.requestFocus();
+                        if (continueMode()) vpnButton.requestFocus();
                         else setShelfMode("continue");
                     }
                     return true;
@@ -3097,7 +3123,7 @@ public class MainActivity extends Activity {
                 case KeyEvent.KEYCODE_ENTER:
                     if (!down) setShelfMode(continueMode() ? "suggest" : "continue");
                     return true;
-                case KeyEvent.KEYCODE_DPAD_UP: if (down) ccButton.requestFocus(); return true;
+                case KeyEvent.KEYCODE_DPAD_UP: if (down) vpnButton.requestFocus(); return true;
                 case KeyEvent.KEYCODE_DPAD_DOWN:
                 case KeyEvent.KEYCODE_BACK:
                     if (down) {
@@ -3112,23 +3138,30 @@ public class MainActivity extends Activity {
                 default: return false;
             }
         }
-        if (f == classicWeatherButton || f == refreshButton || f == searchButton || f == ccButton || f == avatarView) {
-            // Status row, left to right: Weather (if Big Clock), Refresh, Search, Control Center, profile.
+        if (f == vpnButton || f == classicWeatherButton || f == refreshButton || f == searchButton || f == ccButton || f == avatarView) {
+            // Status row, left to right: VPN, Weather (if Big Clock), Refresh, Search, Control Center, profile.
             if (k == KeyEvent.KEYCODE_DPAD_LEFT) {
                 if (down) {
                     if (f == avatarView) ccButton.requestFocus();
                     else if (f == ccButton) searchButton.requestFocus();
                     else if (f == searchButton) refreshButton.requestFocus();
-                    else if (f == refreshButton && classicWeatherButton != null && classicWeatherButton.getVisibility() == View.VISIBLE) {
-                        classicWeatherButton.requestFocus();
-                    } else if (switcher.getVisibility() == View.VISIBLE) switcher.requestFocus();
-                    else if (weatherShown()) weatherCard.requestFocus();
+                    else if (f == refreshButton) {
+                        if (classicWeatherButton != null && classicWeatherButton.getVisibility() == View.VISIBLE) classicWeatherButton.requestFocus();
+                        else vpnButton.requestFocus();
+                    } else if (f == classicWeatherButton) vpnButton.requestFocus();
+                    else if (f == vpnButton) {
+                        if (switcher.getVisibility() == View.VISIBLE) switcher.requestFocus();
+                        else if (weatherShown()) weatherCard.requestFocus();
+                    }
                 }
                 return true;
             }
             if (k == KeyEvent.KEYCODE_DPAD_RIGHT) {
                 if (down) {
-                    if (f == classicWeatherButton) refreshButton.requestFocus();
+                    if (f == vpnButton) {
+                        if (classicWeatherButton != null && classicWeatherButton.getVisibility() == View.VISIBLE) classicWeatherButton.requestFocus();
+                        else refreshButton.requestFocus();
+                    } else if (f == classicWeatherButton) refreshButton.requestFocus();
                     else if (f == refreshButton) searchButton.requestFocus();
                     else if (f == searchButton) ccButton.requestFocus();
                     else if (f == ccButton && avatarView != null && avatarView.getVisibility() == View.VISIBLE) avatarView.requestFocus();
@@ -4861,7 +4894,7 @@ public class MainActivity extends Activity {
     }
 
     int netState = -1, netBars = -1;
-    boolean netEthernet;
+    boolean netEthernet, netVpn, vpnConnected;
 
     void updateNet() {
         if (netIcon == null) return;
@@ -4870,6 +4903,7 @@ public class MainActivity extends Activity {
         int state = nc == null ? 0
                 : nc.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED) ? 2 : 1;
         boolean eth = nc != null && nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET);
+        boolean vpn = nc != null && nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN);
         int bars = 3;
         if (nc != null && !eth) {
             try {
@@ -4881,10 +4915,12 @@ public class MainActivity extends Activity {
             }
         }
         boolean back = netState == 0 || netState == 1;
-        if (state == netState && eth == netEthernet && bars == netBars) return;
+        if (state == netState && eth == netEthernet && bars == netBars && vpn == netVpn) return;
         netState = state;
         netEthernet = eth;
         netBars = bars;
+        netVpn = vpn;
+        updateVpnButton(vpn);
         netIcon.setImageBitmap(netGlyph(state, eth, bars, dp(20)));
         netIcon.setContentDescription(I18n.t(this, state == 2 ? "Online" : state == 1 ? "No internet" : "Offline"));
         // Back online: refresh what needs the internet.
@@ -4892,6 +4928,26 @@ public class MainActivity extends Activity {
         if (state == 2 && back) {
             Weather.refresh(this, true, this::updateWeather);
             loadHero();
+        }
+    }
+
+    void updateVpnButton(boolean connected) {
+        vpnConnected = connected;
+        if (vpnButton == null) return;
+        int color = vpnButton.isFocused() ? 0xFF111114 : (connected ? 0xFF30D158 : Color.WHITE);
+        vpnButton.setImageBitmap(Glyphs.get("shield", dp(20), color));
+        vpnButton.setContentDescription(I18n.t(this, connected ? "VPN connected" : "VPN settings", connected ? "VPN connected" : "VPN settings"));
+    }
+
+    void openVpnSettings() {
+        try {
+            startActivity(new Intent(android.provider.Settings.ACTION_VPN_SETTINGS));
+        } catch (Exception unavailable) {
+            try {
+                startActivity(new Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS));
+            } catch (Exception ignored) {
+                // Keep the launcher usable if this TV exposes no VPN settings activity.
+            }
         }
     }
 
@@ -5684,7 +5740,7 @@ public class MainActivity extends Activity {
 
     boolean statusFocused() {
         View f = getCurrentFocus();
-        return f != null && (f == ccButton || f == avatarView || f == refreshButton || f == searchButton || f == classicWeatherButton);
+        return f != null && (f == vpnButton || f == ccButton || f == avatarView || f == refreshButton || f == searchButton || f == classicWeatherButton);
     }
 
     /** Directional focus inside a popover: nearest cell whose centre lies in that direction. */
