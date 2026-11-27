@@ -32,7 +32,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Top-shelf suggestions: what's popular in India on the user's streaming services, from TMDB
+ * Top-shelf suggestions: what's popular in the selected region on the user's streaming services, from TMDB
  * (themoviedb.org). Results and artwork are cached on disk; everything here runs off the UI thread.
  */
 final class Suggestions {
@@ -349,8 +349,10 @@ final class Suggestions {
                         .put("packages", new JSONArray().put(p.jwShort))
                         .put("objectTypes", new JSONArray().put(kind.equals("tv") ? "SHOW" : "MOVIE"))
                         .put("monetizationTypes", new JSONArray().put("FLATRATE").put("FREE").put("ADS"));
-                JSONObject vars = new JSONObject().put("country", "IN").put("language", "en")
-                        .put("first", POOL).put("filter", filter);
+                String jwLanguage = I18n.getLang(c);
+                if (jwLanguage == null || !jwLanguage.matches("[a-zA-Z]{2}")) jwLanguage = "en";
+                JSONObject vars = new JSONObject().put("country", StreamingCatalog.region(c))
+                        .put("language", jwLanguage).put("first", POOL).put("filter", filter);
                 JSONObject body = new JSONObject().put("query", JW_QUERY).put("variables", vars);
                 JSONObject res = post("https://apis.justwatch.com/graphql", body.toString());
                 JSONArray edges = res.getJSONObject("data").getJSONObject("popularTitles").getJSONArray("edges");
@@ -574,9 +576,14 @@ final class Suggestions {
         for (Provider p : PROVIDERS) {
             if (!provs.contains(String.valueOf(p.id))) continue;
             for (String kind : kinds) {
+                String region = StreamingCatalog.region(c);
+                String language = I18n.getLang(c);
+                if (language == null || !language.matches("[a-zA-Z]{2}")) language = "en";
                 StringBuilder q = new StringBuilder("/discover/").append(kind)
-                        .append("?watch_region=IN&with_watch_monetization_types=flatrate&sort_by=popularity.desc")
-                        .append("&language=en-IN&include_adult=false&with_watch_providers=").append(p.id);
+                        .append("?watch_region=").append(region)
+                        .append("&with_watch_monetization_types=flatrate&sort_by=popularity.desc")
+                        .append("&language=").append(language).append("-").append(region)
+                        .append("&include_adult=false&with_watch_providers=").append(p.id);
                 if (!langs.isEmpty()) q.append("&with_original_language=").append(URLEncoder.encode(android.text.TextUtils.join("|", langs), "UTF-8"));
                 JSONArray results = get(c, q.toString()).optJSONArray("results");
                 List<Item> list = new ArrayList<>();
