@@ -312,6 +312,12 @@ public final class ControlPanelOverlay {
                     if (!startExternal(svcCtx, new Intent(Intent.ACTION_ASSIST))) {
                         startExternal(svcCtx, new Intent("android.search.action.GLOBAL_SEARCH"));
                     }
+                },
+                () -> {
+                    dismiss();
+                    if (MainActivity.activeInstance != null && MainActivity.activeInstance.resumed) {
+                        MainActivity.activeInstance.refreshAll();
+                    }
                 });
 
         FrameLayout.LayoutParams plp = (FrameLayout.LayoutParams) panel.getLayoutParams();
