@@ -93,7 +93,7 @@ if ($LASTEXITCODE -ne 0) { throw "zipalign failed" }
 $KS = "debug.keystore"
 if (-not $env:RELEASE_KEYSTORE -and -not (Test-Path $KS)) {
     & keytool -genkeypair -keystore $KS -storepass android -keypass android -alias debug `
-        -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=tvOS Launcher debug" | Out-Null
+        -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=tvOS Launcher debug" -noprompt | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Debug keystore generation failed" }
 }
 
