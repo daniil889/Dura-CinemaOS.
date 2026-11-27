@@ -89,7 +89,7 @@ public class MediaWatchService extends NotificationListenerService {
     }
 
     @Override
-    public void onListenerDisconnected() {
+    public synchronized void onListenerDisconnected() {
         instance = null;
         try {
             if (msm != null) msm.removeOnActiveSessionsChangedListener(sessions);
@@ -112,7 +112,7 @@ public class MediaWatchService extends NotificationListenerService {
         }
     }
 
-    void onSessions(List<MediaController> list) {
+    synchronized void onSessions(List<MediaController> list) {
         java.util.Set<MediaSession.Token> active = new java.util.HashSet<>();
         if (list != null) for (MediaController mc : list) {
             if (mc == null || mc.getSessionToken() == null) continue;
@@ -127,8 +127,10 @@ public class MediaWatchService extends NotificationListenerService {
                     }
 
                     @Override public void onSessionDestroyed() {
-                        tracked.remove(mc.getSessionToken());
-                        trackedControllers.remove(mc.getSessionToken());
+                        synchronized (MediaWatchService.this) {
+                            tracked.remove(mc.getSessionToken());
+                            trackedControllers.remove(mc.getSessionToken());
+                        }
                     }
                 };
                 try {
@@ -223,7 +225,7 @@ public class MediaWatchService extends NotificationListenerService {
         ensureSessionTracking(c);
     }
 
-    private static void syncControllersStatic(Context appCtx, List<MediaController> list) {
+    private static synchronized void syncControllersStatic(Context appCtx, List<MediaController> list) {
         if (appCtx == null) return;
         java.util.Set<MediaSession.Token> active = new java.util.HashSet<>();
         if (list != null) for (MediaController mc : list) {
@@ -239,8 +241,10 @@ public class MediaWatchService extends NotificationListenerService {
                     }
 
                     @Override public void onSessionDestroyed() {
-                        fallbackTracked.remove(mc.getSessionToken());
-                        fallbackControllers.remove(mc.getSessionToken());
+                        synchronized (MediaWatchService.class) {
+                            fallbackTracked.remove(mc.getSessionToken());
+                            fallbackControllers.remove(mc.getSessionToken());
+                        }
                     }
                 };
                 try {
