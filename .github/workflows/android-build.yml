@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          path: source
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -29,26 +31,31 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
-        run: sdkmanager "platform-tools" "build-tools;34.0.0" "build-tools;35.0.0" "platforms;android-34"
+        with:
+          packages: |
+            platform-tools
+            build-tools;34.0.0
+            build-tools;35.0.0
+            platforms;android-34
 
       - name: Build APK (Linux)
         if: runner.os != 'Windows'
         run: bash ./build.sh
+        working-directory: source
 
       - name: Build APK (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./build.ps1
+        working-directory: source
 
       - name: Verify APK exists
         shell: bash
-        run: test -s build/tvos-home.apk
+        run: test -s source/build/tvos-home.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: tvos-home-${{ runner.os }}
-          path: build/tvos-home.apk
+          path: source/build/tvos-home.apk
           if-no-files-found: error
