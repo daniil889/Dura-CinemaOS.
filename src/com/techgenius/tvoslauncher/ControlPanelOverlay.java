@@ -903,6 +903,7 @@ public final class ControlPanelOverlay {
         int gs = iconOnly ? dp(unit, 26) : dp(unit, 25);
         ImageView gi = new ImageView(c);
         int baseIconColor = ("wifi".equals(glyph) || "bluetooth".equals(glyph)) ? 0xFF0A84FF
+                : "shield".equals(glyph) && isVpnConnected(c) ? 0xFF30D158
                 : "ambient".equals(glyph) ? 0xFFFFD60A
                 : "power".equals(glyph) ? 0xFFFF453A
                 : Color.WHITE;
@@ -1443,12 +1444,22 @@ public final class ControlPanelOverlay {
         return false;
     }
 
+    private static boolean isVpnConnected(Context c) {
+        try {
+            ConnectivityManager cm = c.getSystemService(ConnectivityManager.class);
+            if (cm == null) return false;
+            NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
+            return nc != null && nc.hasTransport(NetworkCapabilities.TRANSPORT_VPN);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
     public static String vpnState(Context c) {
         try {
             ConnectivityManager cm = c.getSystemService(ConnectivityManager.class);
             if (cm == null) return I18n.s(c, "Status unavailable", "Durum kullanılamıyor");
-            NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
-            return nc != null && nc.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+            return isVpnConnected(c)
                     ? I18n.s(c, "Connected", "Bağlı")
                     : I18n.s(c, "Not Connected", "Bağlı Değil");
         } catch (Exception e) {
