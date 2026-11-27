@@ -57,11 +57,13 @@ public final class ControlPanelOverlay {
     private static View memBarFill;
     private static android.graphics.Bitmap cachedSceneBlur;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
-    // Reuse a short-lived worker for screenshot capture; creating a new executor per panel open
-    // would leave one idle thread behind every time the Control Center is shown.
+    // Reuse one short-lived screenshot worker. A zero-length queue prevents rapid panel
+    // open/close cycles from accumulating stale captures; a concurrent request falls back to
+    // the non-blurred glass path through the existing exception handler.
     private static final java.util.concurrent.ThreadPoolExecutor SCREENSHOT_EXECUTOR =
             new java.util.concurrent.ThreadPoolExecutor(0, 1, 10L, java.util.concurrent.TimeUnit.SECONDS,
-                    new java.util.concurrent.LinkedBlockingQueue<>());
+                    new java.util.concurrent.SynchronousQueue<>(),
+                    new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
 
     public interface Status {
         String get();
