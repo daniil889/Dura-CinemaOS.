@@ -2261,6 +2261,7 @@ public final class I18n {
         ru("ADB is active — selecting Install will download and install the update automatically.", "ADB активен — при выборе «Установить» обновление скачается и установится автоматически.");
         ru("ADB is turned off (Secure Mode) — selecting Install will download the update and open the system package installer.", "ADB отключён (безопасный режим) — при выборе «Установить» обновление скачается и откроется системный установщик пакетов.");
         ru("Show Changelog", "Показать список изменений");
+        ru("Press Back to close", "Нажмите «Назад», чтобы закрыть");
         ru("Install", "Установить");
         ru("No changelog text provided for this release.", "Для этого выпуска список изменений не указан.");
         ru("Back", "Назад");
@@ -3575,7 +3576,7 @@ public final class I18n {
         }
         String raw = loc != null ? loc.getLanguage() : null;
         if (raw == null || raw.isEmpty()) {
-            return LANG_EN;
+            return LANG_RU;
         }
         String code = raw.trim().toLowerCase(Locale.US);
         int sep = Math.max(code.indexOf('-'), code.indexOf('_'));
@@ -3587,7 +3588,8 @@ public final class I18n {
         if (LANG_PT.equals(code) && loc != null && "BR".equalsIgnoreCase(loc.getCountry())) {
             return LANG_PT_BR;
         }
-        return SUPPORTED.contains(code) ? code : LANG_EN;
+        // Unknown system locales default to Russian; English remains available as an explicit choice.
+        return SUPPORTED.contains(code) ? code : LANG_RU;
     }
 
     public static void resetCache() {
@@ -3622,7 +3624,7 @@ public final class I18n {
     }
 
     public static void setLang(Context c, String lang) {
-        String valid = (lang != null && SUPPORTED.contains(lang)) ? lang : LANG_EN;
+        String valid = (lang != null && SUPPORTED.contains(lang)) ? lang : LANG_RU;
         cachedLang = valid;
         c.getSharedPreferences("settings", Context.MODE_PRIVATE)
                 .edit().putString("lang", valid).apply();
