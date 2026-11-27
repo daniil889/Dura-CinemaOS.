@@ -12,7 +12,7 @@
 | Android SDK build-tools | **34.0.0** | `aapt2`, `d8`, `zipalign`, `apksigner` |
 | Android SDK platform | **android-34** | `android.jar` для компиляции |
 | Android SDK platform-tools | последняя | `adb` для установки и отладки |
-| Устройство | Android TV 7.0+ (API 24+) | ТВ-приставка/телевизор или эмулятор Android TV |
+| Устройство | Android 6.0+ (API 23+) | ТВ-приставка/телевизор или эмулятор Android TV |
 
 Проверенные устройства: Xiaomi Mi Box 4 (Android 12, 32-битный ARM, GPU Mali-450) и телевизор
 SPPL на Android 9 (1 ГБ ОЗУ). Цель — слабое железо, поэтому по возможности тестируйте именно на
