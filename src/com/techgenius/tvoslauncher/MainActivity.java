@@ -1310,26 +1310,26 @@ public class MainActivity extends Activity {
                     float tiltX = Math.max(-1f, Math.min(1f, ny)) * 0.85f;
                     float parallaxX = Math.max(-1f, Math.min(1f, nx)) * dp(3.2f);
                     float parallaxY = Math.max(-1f, Math.min(1f, ny)) * dp(2.4f);
-                    v.animate().scaleX(FOCUS_SCALE).scaleY(FOCUS_SCALE)
+                    v.animate().withLayer().scaleX(FOCUS_SCALE).scaleY(FOCUS_SCALE)
                             .rotationX(tiltX).rotationY(tiltY).translationZ(dp(9))
-                            .setDuration(230).setInterpolator(LIFT).start();
+                            .setDuration(185).setInterpolator(LIFT).start();
                     // Artwork moves against the card's tilt. Adaptive icons get independent
                     // background/foreground offsets, matching the layered tvOS parallax language.
-                    iconArtwork.animate().scaleX(1.045f).scaleY(1.045f)
+                    iconArtwork.animate().withLayer().scaleX(1.035f).scaleY(1.035f)
                             .translationX(-parallaxX * 0.32f).translationY(-parallaxY * 0.32f)
-                            .setDuration(260).setInterpolator(LIFT).start();
+                            .setDuration(190).setInterpolator(LIFT).start();
                     if (backParallax != null) {
-                        backParallax.animate().translationX(-parallaxX * 0.45f)
-                                .translationY(-parallaxY * 0.45f).setDuration(260)
+                        backParallax.animate().withLayer().translationX(-parallaxX * 0.45f)
+                                .translationY(-parallaxY * 0.45f).setDuration(190)
                                 .setInterpolator(LIFT).start();
                     }
                     if (frontParallax != null) {
-                        frontParallax.animate().translationX(parallaxX)
-                                .translationY(parallaxY).setDuration(260)
+                        frontParallax.animate().withLayer().translationX(parallaxX)
+                                .translationY(parallaxY).setDuration(190)
                                 .setInterpolator(LIFT).start();
                     }
                     label.animate().alpha(1f).translationY(cardH * (FOCUS_SCALE - 1f) / 2f)
-                            .setDuration(170).setInterpolator(LIFT).start();
+                            .setDuration(145).setInterpolator(LIFT).start();
                 }
                 cardGlass.setLit(true);
                 focusGlass.setVisibility(View.VISIBLE);
