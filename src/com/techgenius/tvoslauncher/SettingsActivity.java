@@ -64,6 +64,7 @@ public class SettingsActivity extends Activity {
             ADVANCED = "Advanced",
             UPDATES = "Updates",
             ABOUT = "About",
+            STREAMING = "Streaming",
             SHELF = "Top Shelf",
             PRESENT = "Presentation",
             INPUTS = "Inputs",
@@ -75,6 +76,7 @@ public class SettingsActivity extends Activity {
         {LOOK_SCENES, "scene"},
         {WEATHER, "cloud"},
         {APPS, "apps"},
+        {STREAMING, "play"},
         {PROFILES, "person"},
         {CONTROL_PANEL, "sliders"},
         {BUTTON_MAPPER, "remote"},
@@ -269,6 +271,7 @@ public class SettingsActivity extends Activity {
             case LOCATION:
             case WEATHER: return tr("Weather and location", "Hava durumu ve konum");
             case APPS: return tr("Apps", "Uygulamalar");
+            case STREAMING: return tr("Streaming services", "Yayın servisleri");
             case PROFILES: return tr("People", "Kişiler");
             case CONTROL_PANEL: return tr("Control Panel", "Denetim Paneli");
             case BUTTON_MAPPER: return tr("Button mapper", "Düğme eşleyici");
@@ -891,6 +894,9 @@ public class SettingsActivity extends Activity {
                         break;
                     case APPS:
                         pageApps();
+                        break;
+                    case STREAMING:
+                        pageStreamingCatalogs();
                         break;
                     case PROFILES:
                         pageProfiles();
@@ -1852,6 +1858,103 @@ public class SettingsActivity extends Activity {
         row(tr("Restore settings from folder…", "Klasörden ayarları geri yükle…"),
                 () -> tr("Choose folder ›", "Klasör seç ›"),
                 () -> CustomMedia.showRestoreSettingsPicker(this, this::refreshAll));
+    }
+
+    void pageStreamingCatalogs() {
+        section(tr("CATALOG REGION", "KATALOG BÖLGESİ"));
+        row(tr("Content region", "İçerik bölgesi"),
+                () -> StreamingCatalog.region(this),
+                this::promptStreamingRegion);
+
+        section(tr("APP CATALOG CONNECTIONS", "UYGULAMA KATALOG BAĞLANTILARI"));
+        twoLineRow(tr("YouTube public catalogue", "YouTube genel kataloğu"),
+                () -> StreamingCatalog.prefs(this).getString(StreamingCatalog.KEY_YOUTUBE, "").trim().isEmpty()
+                        ? tr("API key not configured", "API anahtarı ayarlanmadı")
+                        : tr("API key saved", "API anahtarı kaydedildi"),
+                () -> promptStreamingCredential(
+                        tr("YouTube Data API key", "YouTube Data API anahtarı"),
+                        tr("Paste your Google Cloud API key", "Google Cloud API anahtarını girin"),
+                        StreamingCatalog.KEY_YOUTUBE));
+
+        twoLineRow(tr("Kinopoisk catalogue", "Каталог Кинопоиска"),
+                () -> StreamingCatalog.prefs(this).getString(StreamingCatalog.KEY_KINOPOISK, "").trim().isEmpty()
+                        ? tr("Third-party API token not configured", "Токен стороннего API не настроен")
+                        : tr("API token saved", "Токен API сохранён"),
+                () -> promptStreamingCredential(
+                        tr("KinopoiskDev API token", "Токен KinopoiskDev API"),
+                        tr("Paste your KinopoiskDev token", "Вставьте токен KinopoiskDev"),
+                        StreamingCatalog.KEY_KINOPOISK));
+
+        infoNote(tr("YouTube cards use the public regional most-popular chart. Private subscriptions, watch history and account recommendations require Google account authorization and are not read by this key.",
+                "Карточки YouTube используют общедоступный региональный список популярных видео. Личная история просмотров и рекомендации требуют отдельной авторизации Google и этим ключом не читаются."));
+        infoNote(tr("Kinopoisk metadata is supplied by a third-party API, not by Yandex. Cards open the installed Kinopoisk app; exact title deep-links are not assumed.",
+                "Метаданные Кинопоиска поступают от стороннего API, а не от Яндекса. Карточки открывают установленное приложение Кинопоиска; точные ссылки на фильм не предполагаются."));
+        infoNote(tr("Continue Watching remains separate and uses app-published Android TV data and playback sessions.",
+                "Продолжение просмотра работает отдельно и использует данные Android TV и медиасессий, опубликованные самими приложениями."));
+    }
+
+    private void promptStreamingCredential(String title, String hint, String key) {
+        android.widget.EditText input = new android.widget.EditText(this);
+        input.setSingleLine(true);
+        input.setHint(hint);
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+                | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        input.setText(StreamingCatalog.prefs(this).getString(key, ""));
+        int pad = u(14);
+        FrameLayout box = new FrameLayout(this);
+        box.setPaddingRelative(pad, pad / 2, pad, 0);
+        box.addView(input);
+        AlertDialog dlg = dialog(title).setView(box)
+                .setPositiveButton(tr("Save", "Kaydet"), (d, w) -> {
+                    String value = input.getText().toString().trim();
+                    if (value.isEmpty()) return;
+                    StreamingCatalog.prefs(this).edit().putString(key, value).apply();
+                    rebuildMainRows();
+                    showStatusMsg(tr("Catalogue credential saved.", "Katalog anahtarı kaydedildi."));
+                })
+                .setNeutralButton(tr("Clear", "Temizle"), (d, w) -> {
+                    StreamingCatalog.prefs(this).edit().remove(key).apply();
+                    rebuildMainRows();
+                    showStatusMsg(tr("Catalogue credential cleared.", "Katalog anahtarı temizlendi."));
+                })
+                .setNegativeButton(tr("Cancel", "İptal"), null)
+                .show();
+        Ui.setupDialogEditText(input, dlg);
+        input.requestFocus();
+    }
+
+    private void promptStreamingRegion() {
+        android.widget.EditText input = new android.widget.EditText(this);
+        input.setSingleLine(true);
+        input.setHint("NL, US, DE, RU…");
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+                | android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        input.setText(StreamingCatalog.region(this));
+        int pad = u(14);
+        FrameLayout box = new FrameLayout(this);
+        box.setPaddingRelative(pad, pad / 2, pad, 0);
+        box.addView(input);
+        AlertDialog dlg = dialog(tr("Catalogue country", "Ülke kataloğu")).setView(box)
+                .setPositiveButton(tr("Save", "Kaydet"), (d, w) -> {
+                    String value = input.getText().toString().trim().toUpperCase(java.util.Locale.ROOT);
+                    if (!value.matches("[A-Z]{2}")) {
+                        showStatusMsg(tr("Use a two-letter country code, for example NL.", "İki harfli ülke kodu kullanın, örneğin NL."));
+                        return;
+                    }
+                    StreamingCatalog.prefs(this).edit().putString(StreamingCatalog.KEY_REGION, value).apply();
+                    Suggestions.changed(this);
+                    rebuildMainRows();
+                    showStatusMsg(tr("Catalogue region updated to " + value + ".", "Katalog bölgesi " + value + " olarak güncellendi."));
+                })
+                .setNeutralButton(tr("Use device region", "Cihaz bölgesini kullan"), (d, w) -> {
+                    StreamingCatalog.prefs(this).edit().remove(StreamingCatalog.KEY_REGION).apply();
+                    Suggestions.changed(this);
+                    rebuildMainRows();
+                })
+                .setNegativeButton(tr("Cancel", "İptal"), null)
+                .show();
+        Ui.setupDialogEditText(input, dlg);
+        input.requestFocus();
     }
 
     void pageAdvanced() {
