@@ -895,6 +895,9 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams rblp = new LinearLayout.LayoutParams(btn, btn);
         rblp.leftMargin = dp(12);
         clockBox.addView(refreshButton, rblp);
+        // Refresh remains available in Control Center, keeping the status row as quiet as tvOS.
+        refreshButton.setVisibility(View.GONE);
+        refreshButton.setFocusable(false);
         GradientDrawable rfLit = new GradientDrawable();
         rfLit.setShape(GradientDrawable.OVAL);
         rfLit.setColor(Color.WHITE);
@@ -3138,7 +3141,7 @@ public class MainActivity extends Activity {
                 default: return false;
             }
         }
-        if (f == vpnButton || f == classicWeatherButton || f == refreshButton || f == searchButton || f == ccButton || f == avatarView) {
+        if (f == vpnButton || f == classicWeatherButton || f == searchButton || f == ccButton || f == avatarView) {
             // Explicit tvOS-style focus order. Skip optional controls when their preference hides them.
             boolean weatherShortcutVisible = classicWeatherButton != null
                     && classicWeatherButton.getVisibility() == View.VISIBLE;
@@ -3151,9 +3154,9 @@ public class MainActivity extends Activity {
                     if (f == avatarView) ccButton.requestFocus();
                     else if (f == ccButton) {
                         if (searchShortcutVisible) searchButton.requestFocus();
-                        else refreshButton.requestFocus();
-                    } else if (f == searchButton) refreshButton.requestFocus();
-                    else if (f == refreshButton) {
+                        else if (weatherShortcutVisible) classicWeatherButton.requestFocus();
+                        else vpnButton.requestFocus();
+                    } else if (f == searchButton) {
                         if (weatherShortcutVisible) classicWeatherButton.requestFocus();
                         else vpnButton.requestFocus();
                     } else if (f == classicWeatherButton) vpnButton.requestFocus();
@@ -3168,9 +3171,9 @@ public class MainActivity extends Activity {
                 if (down) {
                     if (f == vpnButton) {
                         if (weatherShortcutVisible) classicWeatherButton.requestFocus();
-                        else refreshButton.requestFocus();
-                    } else if (f == classicWeatherButton) refreshButton.requestFocus();
-                    else if (f == refreshButton) {
+                        else if (searchShortcutVisible) searchButton.requestFocus();
+                        else ccButton.requestFocus();
+                    } else if (f == classicWeatherButton) {
                         if (searchShortcutVisible) searchButton.requestFocus();
                         else ccButton.requestFocus();
                     } else if (f == searchButton) ccButton.requestFocus();
@@ -4539,7 +4542,8 @@ public class MainActivity extends Activity {
                 () -> {
                     closeProfilePicker();
                     showSearch(null);
-                });
+                },
+                () -> refreshAll());
 
         FrameLayout.LayoutParams plp = (FrameLayout.LayoutParams) panel.getLayoutParams();
         plp.gravity = Gravity.TOP | Gravity.END;
@@ -5076,9 +5080,7 @@ public class MainActivity extends Activity {
 
     /** Refresh button: fetch fresh recommendations and news, reload Continue Watching and weather. */
     void refreshAll() {
-        refreshButton.animate().cancel();
-        refreshButton.setRotation(0);
-        refreshButton.animate().rotation(360).setDuration(700).setInterpolator(EASE).start();
+        // The refresh action lives in Control Center; do not animate an off-screen status control.
         Suggestions.changed(this);
         lastCwSig = "";
         heroVersion = -1;
@@ -5752,7 +5754,7 @@ public class MainActivity extends Activity {
 
     boolean statusFocused() {
         View f = getCurrentFocus();
-        return f != null && (f == vpnButton || f == ccButton || f == avatarView || f == refreshButton || f == searchButton || f == classicWeatherButton);
+        return f != null && (f == vpnButton || f == ccButton || f == avatarView || f == searchButton || f == classicWeatherButton);
     }
 
     /** Directional focus inside a popover: nearest cell whose centre lies in that direction. */
