@@ -2515,6 +2515,7 @@ public class MainActivity extends Activity {
      * - When Settings / Other Apps / Inputs / top bar / no app is focused, shows the 4-widget Home Dashboard.
      */
     void loadHero() {
+        hideClassicAppPreview();
         if (shelfEmpty != null) shelfEmpty.setAlpha(0f);
         heroItems = new ArrayList<>();
         if (shelfView != null) shelfView.setFocusable(false);
@@ -2886,10 +2887,13 @@ public class MainActivity extends Activity {
         }
     }
 
+    boolean classicAppPreviewShown = false;
+
     void onClassicNonAppFocused() {
         if (Scenes.isScenesLook(this) || folderMode) return;
         activeClassicCwPkg = null;
         hideClassicCw();
+        hideClassicAppPreview();
         showClassicDashboard();
     }
 
@@ -2897,22 +2901,12 @@ public class MainActivity extends Activity {
         if (Scenes.isScenesLook(this) || folderMode) {
             activeClassicCwPkg = null;
             hideClassicCw();
+            hideClassicAppPreview();
             hideClassicDashboard();
             return;
         }
         if (statusFocused() || (weatherCard != null && weatherCard.isFocused())) {
             onClassicNonAppFocused();
-            return;
-        }
-        // Do not show Continue Watching for apps below the dock row
-        if (index >= Math.max(1, currentDockCols)) {
-            activeClassicCwPkg = null;
-            hideClassicCw();
-            if (HomeDashboard.isShowWhenNoCw(this)) {
-                showClassicDashboard();
-            } else {
-                hideClassicDashboard();
-            }
             return;
         }
         AppEntry a = (index >= 0 && index < shown.size()) ? shown.get(index) : null;
@@ -2921,17 +2915,92 @@ public class MainActivity extends Activity {
             onClassicNonAppFocused();
             return;
         }
-        if (!cwEnabled()) {
+        if (index >= Math.max(1, currentDockCols) || !cwEnabled()) {
             activeClassicCwPkg = null;
             hideClassicCw();
-            if (HomeDashboard.isShowWhenNoCw(this)) {
-                showClassicDashboard();
-            } else {
-                hideClassicDashboard();
-            }
+            showClassicAppPreview(a);
             return;
         }
         showClassicCwForPackage(a.pkg);
+    }
+
+    /** Shows a lightweight app-specific Top Shelf scene when the app has no Continue Watching row. */
+    void showClassicAppPreview(AppEntry app) {
+        if (app == null || app.pkg == null || app.pkg.isEmpty() || heroInfo == null || heroFront == null) return;
+        classicAppPreviewShown = true;
+        activeClassicCwPkg = null;
+        hideClassicDashboard();
+        heroFront.animate().cancel();
+        heroInfo.animate().cancel();
+
+        Bitmap artwork = backdropSharp(app, Math.min(1280, screenW), Math.max(1, Math.min(720, screenH)));
+        Bitmap prepared = bakeScrims(artwork);
+        if (prepared != null) heroFront.setImageBitmap(prepared);
+        heroFront.setVisibility(View.VISIBLE);
+        heroFront.setAlpha(0f);
+        heroFront.animate().alpha(1f).setDuration(230).setInterpolator(EASE).start();
+        if (wallView != null) {
+            wallView.setVisibility(View.VISIBLE);
+            wallView.animate().cancel();
+            wallView.animate().alpha(0f).setDuration(200).start();
+        }
+        if (heroBack != null) {
+            heroBack.animate().cancel();
+            heroBack.setAlpha(0f);
+            heroBack.setVisibility(View.GONE);
+        }
+        if (heroDots != null) heroDots.setVisibility(View.GONE);
+        if (heroStrip != null) heroStrip.setVisibility(View.GONE);
+
+        heroProvider.setVisibility(View.VISIBLE);
+        try {
+            heroProvider.setImageDrawable(getPackageManager().getApplicationIcon(app.pkg));
+        } catch (PackageManager.NameNotFoundException ignored) {
+            heroProvider.setVisibility(View.GONE);
+        }
+        heroLogo.setVisibility(View.GONE);
+        heroTitle.setVisibility(View.VISIBLE);
+        heroTitle.setText(app.label == null ? appLabel(app.pkg) : app.label);
+        heroMeta.setText(appLabel(app.pkg));
+        String description = "";
+        try {
+            android.content.pm.ApplicationInfo info = getPackageManager().getApplicationInfo(app.pkg, 0);
+            CharSequence loaded = info.loadDescription(getPackageManager());
+            if (loaded != null) description = loaded.toString().trim();
+        } catch (Exception ignored) { }
+        if (description.isEmpty()) description = app.pkg;
+        heroOverview.setText(description);
+        heroOverview.setMaxLines(3);
+        heroOverview.setVisibility(View.VISIBLE);
+        heroOverview.setAlpha(0.86f);
+        heroButton.setVisibility(View.GONE);
+        heroRemove.setVisibility(View.GONE);
+        heroInfo.setVisibility(View.VISIBLE);
+        heroInfo.setAlpha(0f);
+        heroInfo.animate().alpha(1f).setDuration(220).setInterpolator(EASE).start();
+    }
+
+    void hideClassicAppPreview() {
+        if (!classicAppPreviewShown) return;
+        classicAppPreviewShown = false;
+        if (heroFront != null) {
+            heroFront.animate().cancel();
+            heroFront.animate().alpha(0f).setDuration(160).withEndAction(() -> {
+                if (!classicAppPreviewShown && !heroShown) heroFront.setVisibility(View.GONE);
+            }).start();
+        }
+        if (heroInfo != null) {
+            heroInfo.animate().cancel();
+            heroInfo.animate().alpha(0f).setDuration(150).withEndAction(() -> {
+                if (!classicAppPreviewShown && !heroShown) heroInfo.setVisibility(View.GONE);
+            }).start();
+        }
+        if (wallView != null) {
+            wallView.setVisibility(View.VISIBLE);
+            wallView.animate().cancel();
+            wallView.animate().alpha(1f).setDuration(180).start();
+        }
+        if (heroDots != null) heroDots.setVisibility(View.GONE);
     }
 
     void showClassicDashboard() {
@@ -2983,8 +3052,10 @@ public class MainActivity extends Activity {
         }
         if (pkg.equals(activeClassicCwPkg) && classicCwBox.getVisibility() == View.VISIBLE && !classicCwCards.isEmpty()) {
             hideClassicDashboard();
+            hideClassicAppPreview();
             return;
         }
+        hideClassicAppPreview();
         if (!HomeDashboard.isShowWhenNoCw(this)) {
             hideClassicDashboard();
         }
@@ -3006,11 +3077,13 @@ public class MainActivity extends Activity {
                     classicCwBox.animate().cancel();
                     classicCwBox.setAlpha(0f);
                     classicCwBox.setVisibility(View.GONE);
-                    if (HomeDashboard.isShowWhenNoCw(this)) {
-                        showClassicDashboard();
-                    } else {
-                        hideClassicDashboard();
+                    AppEntry preview = null;
+                    for (AppEntry candidate : shown) {
+                        if (pkg.equals(candidate.pkg)) { preview = candidate; break; }
                     }
+                    if (preview != null) showClassicAppPreview(preview);
+                    else if (HomeDashboard.isShowWhenNoCw(this)) showClassicDashboard();
+                    else hideClassicDashboard();
                     if (restoreSlot >= 0) {
                         focusIndex(focusedIndex);
                     }
@@ -3836,7 +3909,7 @@ public class MainActivity extends Activity {
             return;
         }
         scrollAnim = ObjectAnimator.ofInt(scroll, "scrollY", cur, target);
-        scrollAnim.setDuration(380);
+        scrollAnim.setDuration(260);
         scrollAnim.setInterpolator(EASE);
         scrollAnim.start();
     }
