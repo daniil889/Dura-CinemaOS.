@@ -858,7 +858,7 @@ public class MainActivity extends Activity {
             if (has) onClassicNonAppFocused();
         });
         vpnButton.setOnClickListener(v -> openVpnSettings());
-        vpnButton.setContentDescription(I18n.t(this, "VPN settings", "VPN settings"));
+        vpnButton.setContentDescription(I18n.s(this, "VPN settings", "VPN ayarları"));
 
         // Classic Big Clock Weather Shortcut button in top-right status row (when Big Clock is enabled on Classic look)
         classicWeatherButton = new ImageView(this);
@@ -4936,7 +4936,7 @@ public class MainActivity extends Activity {
         if (vpnButton == null) return;
         int color = vpnButton.isFocused() ? 0xFF111114 : (connected ? 0xFF30D158 : Color.WHITE);
         vpnButton.setImageBitmap(Glyphs.get("shield", dp(20), color));
-        vpnButton.setContentDescription(I18n.t(this, connected ? "VPN connected" : "VPN settings", connected ? "VPN connected" : "VPN settings"));
+        vpnButton.setContentDescription(I18n.s(this, connected ? "VPN connected" : "VPN settings", connected ? "VPN bağlı" : "VPN ayarları"));
     }
 
     void openVpnSettings() {
