@@ -428,11 +428,13 @@ public final class ControlPanelOverlay {
             MainActivity.LiquidGlass.Backdrop glassSource,
             int screenW,
             int screenH) {
-        MainActivity.LiquidGlass.Backdrop bgSrc = glassSource != null ? glassSource : () -> null;
-        MainActivity.LiquidGlass glass = new MainActivity.LiquidGlass(
-                radius, 0x24FFFFFF, bgSrc, screenW, screenH, unit).adaptive().darker(0x59);
-        glass.lens = dp(unit, 7);
-        return glass;
+        // Control Center intentionally uses plain translucent surfaces, not Liquid Glass.
+        GradientDrawable surface = new GradientDrawable();
+        surface.setShape(GradientDrawable.RECTANGLE);
+        surface.setCornerRadius(radius);
+        surface.setColor(0x1FFFFFFF);
+        surface.setStroke(Math.max(1, dp(unit, 1)), 0x35FFFFFF);
+        return surface;
     }
 
     /**
@@ -465,7 +467,7 @@ public final class ControlPanelOverlay {
         panel.setClipChildren(false);
         panel.setClipToPadding(false);
         GradientDrawable panelBg = new GradientDrawable();
-        panelBg.setColor(0xB31A1B20);
+        panelBg.setColor(0x261A1B20);
         panelBg.setCornerRadius(dp(unit, 27));
         panelBg.setStroke(Math.max(1, dp(unit, 0.8f)), 0x55FFFFFF);
         panel.setBackground(panelBg);
@@ -616,10 +618,21 @@ public final class ControlPanelOverlay {
         }
         if (totalH <= 0) totalH = cap;
 
-        FrameLayout.LayoutParams plp = new FrameLayout.LayoutParams(w + 2 * pad, totalH + 2 * pad, Gravity.TOP | Gravity.END);
+        int panelW = w + 2 * pad;
+        int panelH = totalH + 2 * pad;
+        FrameLayout.LayoutParams plp = new FrameLayout.LayoutParams(panelW, panelH, Gravity.TOP | Gravity.END);
         plp.topMargin = dp(unit, 36);
         plp.rightMargin = dp(unit, 28);
         panel.setLayoutParams(plp);
+
+        // Keep every tile inside the visible safe area on short or overscanned TV displays.
+        float availableW = Math.max(1f, screenW - dp(unit, 56));
+        float availableH = Math.max(1f, screenH - dp(unit, 112));
+        float fit = Math.min(1f, Math.min(availableW / panelW, availableH / panelH));
+        panel.setPivotX(panelW);
+        panel.setPivotY(0f);
+        panel.setScaleX(fit);
+        panel.setScaleY(fit);
         return panel;
     }
 
@@ -1501,6 +1514,31 @@ public final class ControlPanelOverlay {
     }
 
     public static void openVpnSettings(Context c) {
+        // Prefer the installed VPN client itself. Android TV often exposes only a generic
+        // VPN settings page, which is not where users expect this shortcut to take them.
+        try {
+            android.content.pm.PackageManager pm = c.getPackageManager();
+            List<android.content.pm.ResolveInfo> services = pm.queryIntentServices(
+                    new Intent("android.net.VpnService"), 0);
+            String preferredPackage = null;
+            for (android.content.pm.ResolveInfo service : services) {
+                if (service == null || service.serviceInfo == null) continue;
+                String pkg = service.serviceInfo.packageName;
+                if (pkg == null || pkg.isEmpty()) continue;
+                Intent launch = pm.getLaunchIntentForPackage(pkg);
+                if (launch == null) continue;
+                if (preferredPackage == null) preferredPackage = pkg;
+                CharSequence label = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0));
+                if (label != null && label.toString().toLowerCase(java.util.Locale.ROOT).contains("vpn")) {
+                    preferredPackage = pkg;
+                    break;
+                }
+            }
+            if (preferredPackage != null) {
+                Intent launch = pm.getLaunchIntentForPackage(preferredPackage);
+                if (launch != null && startExternal(c, launch)) return;
+            }
+        } catch (Throwable ignored) { }
         startExternal(c, new Intent(Settings.ACTION_VPN_SETTINGS),
                 new Intent(Settings.ACTION_WIRELESS_SETTINGS), new Intent(Settings.ACTION_SETTINGS));
     }
