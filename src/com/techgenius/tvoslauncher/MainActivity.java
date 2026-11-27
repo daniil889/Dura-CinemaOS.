@@ -861,6 +861,14 @@ public class MainActivity extends Activity {
             if (has) onClassicNonAppFocused();
         });
         vpnButton.setOnClickListener(v -> openVpnSettings());
+        vpnButton.setOnKeyListener((v, keyCode, event) -> {
+            if ((keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)
+                    && event.getAction() == KeyEvent.ACTION_UP) {
+                openVpnSettings();
+                return true;
+            }
+            return false;
+        });
         vpnButton.setContentDescription(I18n.s(this, "VPN settings", "VPN ayarları"));
 
         // Classic Big Clock Weather Shortcut button in top-right status row (when Big Clock is enabled on Classic look)
@@ -981,8 +989,8 @@ public class MainActivity extends Activity {
         weatherGlass = new LiquidGlass(dp(WeatherView.COMPACT_H) / 2f, 0x2E000000, glassSource, screenW, screenH, unit).adaptive();
         weatherGlass.lens = dp(6);
         weatherCard.setBackground(weatherGlass);
-        weatherCard.setFocusable(true);
-        weatherCard.setClickable(true);
+        weatherCard.setFocusable(false);
+        weatherCard.setClickable(false);
         weatherCard.setOnFocusChangeListener((v, has) -> {
             weatherGlass.setLit(has);
             if (has) {
@@ -994,7 +1002,7 @@ public class MainActivity extends Activity {
         });
         weatherCard.setPivotX(0);
         weatherCard.setPivotY(0);
-        weatherCard.setOnClickListener(v -> showWeather());
+        weatherCard.setOnClickListener(null);
         // Top left, level with the status row and inside the same 48 px edge margin.
         FrameLayout.LayoutParams wlp = new FrameLayout.LayoutParams(dp(WeatherView.COMPACT_W), dp(WeatherView.COMPACT_H),
                 Gravity.TOP | Gravity.START);
@@ -1196,6 +1204,8 @@ public class MainActivity extends Activity {
         tile.setBackground(bg);
         tile.setOutlineProvider(roundedOutline(new float[]{cardRadius}));
         tile.setClipToOutline(true);
+        tile.setClipChildren(true);
+        tile.setClipToPadding(true);
         tile.setElevation(dp(2));
         tile.setCameraDistance(10500 * unit);
 
@@ -1299,7 +1309,7 @@ public class MainActivity extends Activity {
                     v.setRotationX(0f);
                     v.setRotationY(0f);
                     label.setAlpha(1f);
-                    label.setTranslationY(cardH * (FOCUS_SCALE - 1f) / 2f);
+                    label.setTranslationY(0f);
                 } else {
                     // A tiny perspective lean points each focused card back toward the viewer.
                     // It is position-based (not an endless animation), so DPAD navigation stays calm.
@@ -1331,7 +1341,7 @@ public class MainActivity extends Activity {
                                 .translationY(parallaxY).setDuration(215)
                                 .setInterpolator(LIFT).start();
                     }
-                    label.animate().alpha(1f).translationY(cardH * (FOCUS_SCALE - 1f) / 2f)
+                    label.animate().alpha(1f).translationY(0f)
                             .setDuration(145).setInterpolator(LIFT).start();
                 }
                 cardGlass.setLit(true);
@@ -2962,7 +2972,17 @@ public class MainActivity extends Activity {
             onClassicNonAppFocused();
             return;
         }
-        if (index >= Math.max(1, currentDockCols) || !cwEnabled()) {
+        // App artwork belongs only to the first home row and only to known streaming services.
+        // Lower rows are the app grid: keep the wallpaper clean and never repeat the selected app
+        // banner/logo behind the grid.
+        if (index >= Math.max(1, currentDockCols) || !isStreamingPlatform(a)) {
+            activeClassicCwPkg = null;
+            hideClassicCw();
+            hideClassicAppPreview();
+            hideClassicDashboard();
+            return;
+        }
+        if (!cwEnabled()) {
             activeClassicCwPkg = null;
             hideClassicCw();
             showClassicAppPreview(a);
@@ -2971,25 +2991,41 @@ public class MainActivity extends Activity {
         showClassicCwForPackage(a.pkg);
     }
 
+    /** Strict allow-list: generic apps, browsers, utilities and YouTube never get a Top Shelf. */
+    boolean isStreamingPlatform(AppEntry app) {
+        if (app == null || app.pkg == null) return false;
+        String pkg = app.pkg.toLowerCase(java.util.Locale.ROOT);
+        String label = app.label == null ? "" : app.label.toLowerCase(java.util.Locale.ROOT);
+        String identity = pkg + " " + label;
+        if (identity.contains("youtube") || identity.contains("browser")) return false;
+        String[] known = {
+                "kinopoisk", "ivi", "okko", "zona", "rutube",
+                "netflix", "primevideo", "amazonvideo", "disneyplus", "disney+",
+                "appletv", "apple tv", "max", "hulu", "paramount", "peacock",
+                "crunchyroll", "hotstar", "zee5", "sonyliv"
+        };
+        for (String token : known) if (identity.contains(token)) return true;
+        return false;
+    }
+
     /** Shows a lightweight app-specific Top Shelf scene when the app has no Continue Watching row. */
     void showClassicAppPreview(AppEntry app) {
-        if (app == null || app.pkg == null || app.pkg.isEmpty() || heroInfo == null || heroFront == null) return;
+        if (app == null || app.pkg == null || app.pkg.isEmpty() || !isStreamingPlatform(app)
+                || heroInfo == null || heroFront == null) return;
         classicAppPreviewShown = true;
         activeClassicCwPkg = null;
         hideClassicDashboard();
         heroFront.animate().cancel();
         heroInfo.animate().cancel();
-
-        Bitmap artwork = backdropSharp(app, Math.min(1280, screenW), Math.max(1, Math.min(720, screenH)));
-        Bitmap prepared = bakeScrims(artwork);
-        if (prepared != null) heroFront.setImageBitmap(prepared);
-        heroFront.setVisibility(View.VISIBLE);
+        // Never substitute the app icon/banner for programme artwork. Until the app publishes
+        // genuine poster data, the user's selected wallpaper remains the only background.
+        heroFront.setImageDrawable(null);
         heroFront.setAlpha(0f);
-        heroFront.animate().alpha(1f).setDuration(230).setInterpolator(EASE).start();
+        heroFront.setVisibility(View.GONE);
         if (wallView != null) {
-            wallView.setVisibility(View.VISIBLE);
             wallView.animate().cancel();
-            wallView.animate().alpha(0f).setDuration(200).start();
+            wallView.setAlpha(1f);
+            wallView.setVisibility(View.VISIBLE);
         }
         if (heroBack != null) {
             heroBack.animate().cancel();
@@ -2998,33 +3034,15 @@ public class MainActivity extends Activity {
         }
         if (heroDots != null) heroDots.setVisibility(View.GONE);
         if (heroStrip != null) heroStrip.setVisibility(View.GONE);
-
-        heroProvider.setVisibility(View.VISIBLE);
-        try {
-            heroProvider.setImageDrawable(getPackageManager().getApplicationIcon(app.pkg));
-        } catch (PackageManager.NameNotFoundException ignored) {
-            heroProvider.setVisibility(View.GONE);
-        }
-        heroLogo.setVisibility(View.GONE);
-        heroTitle.setVisibility(View.VISIBLE);
-        heroTitle.setText(app.label == null ? appLabel(app.pkg) : app.label);
-        heroMeta.setText(appLabel(app.pkg));
-        String description = "";
-        try {
-            android.content.pm.ApplicationInfo info = getPackageManager().getApplicationInfo(app.pkg, 0);
-            CharSequence loaded = info.loadDescription(getPackageManager());
-            if (loaded != null) description = loaded.toString().trim();
-        } catch (Exception ignored) { }
-        if (description.isEmpty()) description = app.pkg;
-        heroOverview.setText(description);
-        heroOverview.setMaxLines(3);
-        heroOverview.setVisibility(View.VISIBLE);
-        heroOverview.setAlpha(0.86f);
-        heroButton.setVisibility(View.GONE);
-        heroRemove.setVisibility(View.GONE);
-        heroInfo.setVisibility(View.VISIBLE);
+        if (heroProvider != null) heroProvider.setVisibility(View.GONE);
+        if (heroLogo != null) heroLogo.setVisibility(View.GONE);
+        if (heroTitle != null) heroTitle.setVisibility(View.GONE);
+        if (heroMeta != null) heroMeta.setVisibility(View.GONE);
+        if (heroOverview != null) heroOverview.setVisibility(View.GONE);
+        if (heroButton != null) heroButton.setVisibility(View.GONE);
+        if (heroRemove != null) heroRemove.setVisibility(View.GONE);
+        heroInfo.setVisibility(View.GONE);
         heroInfo.setAlpha(0f);
-        heroInfo.animate().alpha(1f).setDuration(220).setInterpolator(EASE).start();
         loadAppPublishedTopShelf(app);
     }
 
@@ -3095,10 +3113,20 @@ public class MainActivity extends Activity {
                         || !pkg.equals(shown.get(focusedIndex).pkg)) return;
                 if (programs.isEmpty()) return;
                 hideClassicDashboard();
+                if (wallView != null) {
+                    wallView.animate().cancel();
+                    wallView.animate().alpha(0f).setDuration(220).withEndAction(() -> {
+                        if (classicAppPreviewShown && pkg.equals(appTopShelfPkg)) wallView.setVisibility(View.GONE);
+                    }).start();
+                }
                 heroProvider.setVisibility(View.GONE);
                 heroLogo.setVisibility(View.GONE);
                 heroButton.setVisibility(View.GONE);
                 heroRemove.setVisibility(View.GONE);
+                heroFront.setVisibility(View.VISIBLE);
+                heroFront.setAlpha(1f);
+                heroInfo.setVisibility(View.VISIBLE);
+                heroInfo.setAlpha(1f);
                 updateAppTopShelfHero(programs.get(0), app);
                 int cardW = dp(132), cardH = dp(198), gap = dp(15);
                 for (int i = 0; i < programs.size(); i++) {
@@ -3160,7 +3188,7 @@ public class MainActivity extends Activity {
     }
 
     void updateAppTopShelfHero(AppPublishedProgram program, AppEntry app) {
-        if (program == null) return;
+        if (program == null || program.poster == null || program.poster.trim().isEmpty()) return;
         heroTitle.setText(program.title == null ? "" : program.title);
         heroMeta.setText(app.label == null ? appLabel(app.pkg) : app.label);
         heroOverview.setText(program.description == null ? "" : program.description);
@@ -3169,6 +3197,22 @@ public class MainActivity extends Activity {
         heroOverview.setMaxLines(3);
         heroTitle.setVisibility(View.VISIBLE);
         heroMeta.setVisibility(View.VISIBLE);
+        final int generation = appTopShelfGeneration;
+        final String pkg = app.pkg;
+        io.execute(() -> {
+            Bitmap image = Suggestions.image(this, program.poster, "w780", Math.min(1600, screenW * 2));
+            if (image == null) return;
+            handler.post(() -> {
+                if (generation != appTopShelfGeneration || !classicAppPreviewShown
+                        || !pkg.equals(appTopShelfPkg) || heroFront == null) {
+                    image.recycle();
+                    return;
+                }
+                heroFront.setImageBitmap(bakeScrims(image));
+                heroFront.setVisibility(View.VISIBLE);
+                heroFront.setAlpha(1f);
+            });
+        });
     }
 
     void openAppPublishedProgram(AppPublishedProgram program, String pkg) {
