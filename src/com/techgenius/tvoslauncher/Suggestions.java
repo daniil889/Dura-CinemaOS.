@@ -392,6 +392,61 @@ final class Suggestions {
         return sources;
     }
 
+    /** Fetches public JustWatch discovery cards for one installed service, independent of global mix settings. */
+    static List<Item> fetchJustWatchForProvider(Context c, Provider p, int limit) throws Exception {
+        List<Item> out = new ArrayList<>();
+        if (c == null || p == null || p.jwShort == null || p.jwShort.isEmpty()) return out;
+        String t = types(c);
+        List<String> kinds = t.equals("both") ? Arrays.asList("tv", "movie") : Arrays.asList(t);
+        String jwLanguage = I18n.getLang(c);
+        if (jwLanguage == null || !jwLanguage.matches("[a-zA-Z]{2}")) jwLanguage = "en";
+        for (String kind : kinds) {
+            JSONObject filter = new JSONObject()
+                    .put("packages", new JSONArray().put(p.jwShort))
+                    .put("objectTypes", new JSONArray().put(kind.equals("tv") ? "SHOW" : "MOVIE"))
+                    .put("monetizationTypes", new JSONArray().put("FLATRATE").put("FREE").put("ADS"));
+            JSONObject vars = new JSONObject().put("country", StreamingCatalog.region(c))
+                    .put("language", jwLanguage).put("first", Math.min(POOL, Math.max(1, limit)))
+                    .put("filter", filter);
+            JSONObject body = new JSONObject().put("query", JW_QUERY).put("variables", vars);
+            JSONObject res = post("https://apis.justwatch.com/graphql", body.toString());
+            JSONArray edges = res.getJSONObject("data").getJSONObject("popularTitles").getJSONArray("edges");
+            for (int i = 0; i < edges.length() && out.size() < limit; i++) {
+                JSONObject node = edges.getJSONObject(i).getJSONObject("node");
+                JSONObject content = node.getJSONObject("content");
+                JSONArray backdrops = content.optJSONArray("backdrops");
+                if (backdrops == null || backdrops.length() == 0) continue;
+                Item item = new Item();
+                item.id = Math.abs(node.optString("id").hashCode());
+                item.type = kind;
+                item.providerId = p.id;
+                item.pkg = p.pkg;
+                item.key = "justwatch:" + p.id + ":" + node.optString("id");
+                item.title = content.optString("title");
+                item.overview = content.optString("shortDescription");
+                item.backdrop = "https://images.justwatch.com" + backdrops.getJSONObject(0)
+                        .getString("backdropUrl").replace("{profile}", "s1440").replace("{format}", "jpg");
+                item.logo = "";
+                int year = content.optInt("originalReleaseYear", 0);
+                item.year = year > 0 ? String.valueOf(year) : "";
+                JSONObject scoring = content.optJSONObject("scoring");
+                item.rating = scoring == null ? 0d : scoring.optDouble("imdbScore", 0d);
+                item.genres = jwGenres(content.optJSONArray("genres"));
+                JSONArray offers = node.optJSONArray("offers");
+                for (int k = 0; offers != null && k < offers.length(); k++) {
+                    JSONObject offer = offers.getJSONObject(k);
+                    JSONObject pack = offer.optJSONObject("package");
+                    if (pack != null && p.jwTech.equals(pack.optString("technicalName"))) {
+                        item.link = offer.optString("standardWebURL", "");
+                        break;
+                    }
+                }
+                if (!item.title.isEmpty()) out.add(item);
+            }
+        }
+        return out;
+    }
+
     /**
      * Fetches popular & recently released movies and TV series for one or more countries
      * (used by the Home Dashboard Latest Releases widget).
