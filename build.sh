@@ -23,7 +23,7 @@ done
 rm -rf build && mkdir -p build/gen build/classes build/dex
 
 "$BT/aapt2" compile --dir res -o build/res.zip
-"$BT/aapt2" link -o build/unsigned.apk -I "$JAR" --manifest AndroidManifest.xml \
+"$BT/aapt2" link -o build/unsigned.apk -I "$JAR" --manifest AndroidManifest.xml --custom-package com.techgenius.tvoslauncher \
     -A assets --java build/gen --min-sdk-version 23 --target-sdk-version 34 \
     --version-code "${VERSION_CODE:-17}" --version-name "${VERSION_NAME:-2.2.5}" build/res.zip
 
