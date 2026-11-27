@@ -3110,13 +3110,13 @@ public class MainActivity extends Activity {
                     card.setClipChildren(false);
                     card.setClipToPadding(false);
                     android.graphics.drawable.GradientDrawable cardBg = new android.graphics.drawable.GradientDrawable();
-                    cardBg.setColor(0x261FFFFFF);
+                    cardBg.setColor(0x26FFFFFF);
                     cardBg.setCornerRadius(dp(9));
                     card.setBackground(cardBg);
                     card.setPadding(dp(3), dp(3), dp(3), dp(4));
                     ImageView poster = new ImageView(this);
                     poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                    poster.setBackgroundColor(0x331FFFFFF);
+                    poster.setBackgroundColor(0x33FFFFFF);
                     android.graphics.drawable.GradientDrawable posterOutline = new android.graphics.drawable.GradientDrawable();
                     posterOutline.setColor(Color.TRANSPARENT);
                     posterOutline.setCornerRadius(dp(7));
