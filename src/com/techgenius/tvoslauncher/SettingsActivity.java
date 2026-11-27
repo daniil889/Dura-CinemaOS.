@@ -5819,6 +5819,8 @@ public class SettingsActivity extends Activity {
         v.setTypeface(Ui.font(this, "medium"));
         Ui.textSize(v, 14f);
         v.setSingleLine(true);
+        v.setEllipsize(TextUtils.TruncateAt.END);
+        v.setMaxWidth(u(220));
         LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         vlp.setMarginStart(u(10));
