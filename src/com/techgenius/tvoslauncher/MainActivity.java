@@ -883,31 +883,7 @@ public class MainActivity extends Activity {
         });
         classicWeatherButton.setOnClickListener(v -> showWeather());
 
-        // Refresh: reloads every part of the carousel (recommendations, news, Continue Watching) and weather.
-        refreshButton = new ImageView(this);
-        refreshButton.setScaleType(ImageView.ScaleType.CENTER);
-        refreshButton.setImageBitmap(Glyphs.get("refresh", dp(20), Color.WHITE));
-        LiquidGlass rfGlass = new LiquidGlass(btn / 2f, 0x1F000000, glassSource, screenW, screenH, unit).adaptive();
-        rfGlass.lens = dp(4);
-        refreshButton.setBackground(rfGlass);
-        refreshButton.setFocusable(true);
-        refreshButton.setClickable(true);
-        LinearLayout.LayoutParams rblp = new LinearLayout.LayoutParams(btn, btn);
-        rblp.leftMargin = dp(12);
-        clockBox.addView(refreshButton, rblp);
-        // Refresh remains available in Control Center, keeping the status row as quiet as tvOS.
-        refreshButton.setVisibility(View.GONE);
-        refreshButton.setFocusable(false);
-        GradientDrawable rfLit = new GradientDrawable();
-        rfLit.setShape(GradientDrawable.OVAL);
-        rfLit.setColor(Color.WHITE);
-        refreshButton.setOnFocusChangeListener((v, has) -> {
-            refreshButton.setBackground(has ? rfLit : rfGlass);
-            refreshButton.setImageBitmap(Glyphs.get("refresh", dp(20), has ? 0xFF111114 : Color.WHITE));
-            v.animate().scaleX(has ? 1.12f : 1f).scaleY(has ? 1.12f : 1f).setDuration(200).setInterpolator(LIFT).start();
-            if (has) onClassicNonAppFocused();
-        });
-        refreshButton.setOnClickListener(v -> refreshAll());
+        // Refresh is exposed as a quick action in Control Center to keep the status row minimal.
 
         // Search, beside Control Center: apps, settings, and movies and shows on every service.
         searchButton = new ImageView(this);
@@ -1325,7 +1301,6 @@ public class MainActivity extends Activity {
         if (clockBox != null) clockBox.invalidate();
         if (timeChipView != null) timeChipView.invalidate();
         if (classicWeatherButton != null) classicWeatherButton.invalidate();
-        if (refreshButton != null) refreshButton.invalidate();
         if (searchButton != null) searchButton.invalidate();
         if (ccButton != null) ccButton.invalidate();
         if (weatherCard != null) weatherCard.invalidate();
@@ -2693,7 +2668,7 @@ public class MainActivity extends Activity {
     /** Carousel focused: the dock slides away and the artwork takes the whole screen (tvOS Top Shelf). */
     boolean heroRequested;
 
-    ImageView avatarView, ccButton, refreshButton, searchButton, classicWeatherButton, netIcon, vpnButton;
+    ImageView avatarView, ccButton, searchButton, classicWeatherButton, netIcon, vpnButton;
     View timeChipView;
     TextClock statusClock;
 
