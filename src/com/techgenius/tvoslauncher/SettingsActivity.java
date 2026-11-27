@@ -252,6 +252,17 @@ public class SettingsActivity extends Activity {
         return Ui.px(this, dp);
     }
 
+    /** Shares the launcher's backdrop-sampled glass material with the settings surfaces. */
+    private android.graphics.drawable.Drawable settingsGlass(float radius, int tint, float lens) {
+        MainActivity host = MainActivity.activeInstance;
+        if (host == null || host.screenW <= 0 || host.screenH <= 0) return null;
+        MainActivity.LiquidGlass glass = new MainActivity.LiquidGlass(
+                u(radius), tint, host.glassSource, host.screenW, host.screenH, host.unit).adaptive();
+        glass.lens = u(lens);
+        glass.rimStrength = 0.92f;
+        return glass;
+    }
+
     private String sectionTitle(String sec) {
         switch (sec) {
             case LOOK_SCENES: return tr("Appearance and scenes", "Görünüm ve sahneler");
@@ -301,7 +312,8 @@ public class SettingsActivity extends Activity {
                 new int[]{0x70262B36, 0x59171B24});
         sideSurface.setCornerRadius(u(25));
         sideSurface.setStroke(Math.max(1, u(1)), 0x2EFFFFFF);
-        sideCol.setBackground(sideSurface);
+        android.graphics.drawable.Drawable sideGlass = settingsGlass(25f, 0x6B171B24, 0f);
+        sideCol.setBackground(sideGlass != null ? sideGlass : sideSurface);
         sideCol.setPadding(u(8), u(10), u(8), u(10));
         LinearLayout.LayoutParams sideLp = new LinearLayout.LayoutParams(u(288), ViewGroup.LayoutParams.MATCH_PARENT);
         sideLp.setMarginEnd(u(26));
@@ -341,7 +353,8 @@ public class SettingsActivity extends Activity {
                 new int[]{0x6B202630, 0x5212161E});
         mainSurface.setCornerRadius(u(27));
         mainSurface.setStroke(Math.max(1, u(1)), 0x30FFFFFF);
-        mainCol.setBackground(mainSurface);
+        android.graphics.drawable.Drawable mainGlass = settingsGlass(27f, 0x6812161E, u(5));
+        mainCol.setBackground(mainGlass != null ? mainGlass : mainSurface);
         mainCol.setPadding(u(14), u(10), u(14), u(12));
         mainCol.setClipToOutline(true);
         columns.addView(mainCol, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
@@ -598,7 +611,12 @@ public class SettingsActivity extends Activity {
             row.addView(label, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
+            row.setCameraDistance(10000f * Ui.unit(this));
             row.setOnFocusChangeListener((v, has) -> {
+                v.animate().scaleX(has ? 1.025f : 1f).scaleY(has ? 1.025f : 1f)
+                        .translationZ(has ? u(5) : 0f).setDuration(has ? 190 : 150)
+                        .setInterpolator(has ? new android.view.animation.DecelerateInterpolator(1.6f)
+                                : new android.view.animation.DecelerateInterpolator()).start();
                 if (rebuilding) return;
                 if (has) {
                     inRows = false;
